@@ -1,4 +1,5 @@
 import type { Text } from 'pixi.js';
+import { Pulse } from '../components/Pulse';
 import { Spin } from '../components/Spin';
 import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/Background';
@@ -25,7 +26,9 @@ export class MainMenuScreen implements Screen {
         const logo = new Entity();
         logo.addChild(createImage(assets.texture(ASSETS.logo)));
         logo.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 200);
+        // Two behaviors composed onto one entity — they stack automatically.
         logo.addComponent(new Spin(logo, { speed: 30 }));
+        logo.addComponent(new Pulse(logo, { periodMs: 1500 }));
         ui.addChild(logo);
         this.entities.push(logo);
 
