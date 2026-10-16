@@ -43,7 +43,8 @@ npm run build    # produce an optimized build in dist/
 If you're new, do these in order:
 
 1. **Run it.** `npm install` then `npm run dev`.
-2. **Find the gameplay code.** Open `src/game/screens/GameScreen.ts` — this is "the game".
+2. **Find the gameplay code.** Open `src/game/screens/PongScreen.ts` — this is "the game"
+   (a small Pong demo).
    Change the message text, save, and watch it update live.
 3. **Understand the flow.** The game boots in `src/main.ts` → `Game.ts` → the `Preloader`
    screen → `MainMenu` → `Game` → `GameOver`. Tap anywhere to advance between them.
@@ -88,7 +89,7 @@ src/
         ├── index.ts            Registers every screen with the ScreenManager
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
         ├── MainMenuScreen.ts   Title screen (entity + Spin component demo)
-        ├── GameScreen.ts       The game itself
+        ├── PongScreen.ts        The game itself (Pong demo of the composition model)
         └── GameOverScreen.ts   Game over screen
 ```
 
@@ -106,8 +107,8 @@ A screen is a plain object with a lifecycle. There's no base class to extend —
 the parts you need:
 
 ```ts
-export interface Screen {
-    init(context: ScreenContext): Promise<void> | void; // build it (may await assets)
+export interface Screen<P = void> {
+    init(context: ScreenContext, params: P): Promise<void> | void; // build it (may await assets)
     update?(dt: number): void;                          // called every frame, dt in milliseconds
     onResize?(viewport: ViewportMetrics): void;         // viewport changed
     destroy?(): void;                                   // release subscriptions/resources
@@ -128,6 +129,36 @@ The `ScreenContext` passed to `init()` is your toolbox:
 
 `ScreenManager` handles the transition details for you: it destroys the outgoing screen's
 containers and listeners before building the next one, and only ticks the active screen.
+
+### Passing data between screens
+
+`screens.start()` accepts an optional `params` payload that is handed to the next screen's
+factory and `init()`. Declare the payload type on the screen that receives it:
+
+```ts
+// The receiving screen declares what it expects:
+export interface GameOverParams {
+    playerScore: number;
+    aiScore: number;
+}
+
+export class GameOverScreen implements Screen<GameOverParams> {
+    init({ ui }: ScreenContext, params: GameOverParams): void {
+        const score = createLabel(`${params.playerScore} : ${params.aiScore}`);
+        // ...
+    }
+}
+```
+
+```ts
+// The sending screen passes it at transition time:
+void screens.start(SCREENS.GameOver, { playerScore: 5, aiScore: 3 });
+```
+
+Screens that don't need data simply use the default `Screen` (i.e. `Screen<void>`) and ignore
+the param. Note that `params` is **per-transition** — it exists only while the screen is
+active. For state that must outlive screens (settings, totals), create a small store in
+`Game.ts` and reach it through the `ScreenContext` instead.
 
 ### 2. `world` vs `ui` (and `Responsive`)
 
@@ -200,7 +231,7 @@ Copy-paste starting points. All snippets assume you're inside a screen's `init(c
    import type { Screen, ScreenContext } from '../core/screens/Screen';
 
    export class SettingsScreen implements Screen {
-       init({ ui }: ScreenContext): void {
+       init({ ui }: ScreenContext, _params: void): void {
            // build your UI here
        }
        destroy(): void {
@@ -209,13 +240,18 @@ Copy-paste starting points. All snippets assume you're inside a screen's `init(c
    }
    ```
 
+   Need data from the previous screen (e.g. a level number)? Declare a params
+   type and use `implements Screen<SettingsParams>` — see
+   **[Passing data between screens](#passing-data-between-screens)**.
+
 3. Register it in `src/game/screens/index.ts`:
 
    ```ts
    screens.register(SCREENS.Settings, () => new SettingsScreen());
    ```
 
-4. Navigate to it from anywhere with `screens.start(SCREENS.Settings)`.
+4. Navigate to it from anywhere with `screens.start(SCREENS.Settings)` — optionally with a
+   payload: `screens.start(SCREENS.Settings, { level: 3 })`.
 
 ### Show an image
 

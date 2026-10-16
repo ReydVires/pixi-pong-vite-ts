@@ -15,7 +15,7 @@ export class MainMenuScreen implements Screen {
     private stopListening: Unsubscribe | null = null;
     private info: Text | null = null;
 
-    init(context: ScreenContext): void {
+    init(context: ScreenContext, _params: void): void {
         const { world, ui, assets, input, screens, responsive } = context;
 
         // Backdrop lives in the world layer so it can bleed past the design area.

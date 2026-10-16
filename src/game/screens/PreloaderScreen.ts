@@ -11,7 +11,7 @@ import type { Screen, ScreenContext } from '../core/screens/Screen';
 export class PreloaderScreen implements Screen {
     private bar: ProgressBar | null = null;
 
-    async init(context: ScreenContext): Promise<void> {
+    async init(context: ScreenContext, _params: void): Promise<void> {
         const { world, ui, assets, screens, responsive } = context;
 
         world.addChild(createColorBackground(COLORS.clear, responsive));

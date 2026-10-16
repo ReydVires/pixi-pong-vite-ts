@@ -36,6 +36,12 @@ export class PointerInput {
         return () => this.root.off('pointerdown', handler);
     }
 
+    /** Listen for every pointer move (drag/hover). Returns an unsubscribe function. */
+    onMove(handler: (event: FederatedPointerEvent) => void): Unsubscribe {
+        this.root.on('pointermove', handler);
+        return () => this.root.off('pointermove', handler);
+    }
+
     /** Stop tracking the viewport. Safe to call more than once. */
     destroy(): void {
         this.stopResize();

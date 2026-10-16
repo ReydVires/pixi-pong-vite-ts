@@ -20,9 +20,9 @@ import type { Screen, ScreenContext, ScreenFactory } from './Screen';
  * - `update()` only ever reaches the active screen.
  */
 export class ScreenManager {
-    private readonly factories = new Map<string, ScreenFactory>();
+    private readonly factories = new Map<string, ScreenFactory<never>>();
     private readonly stopResize: Unsubscribe;
-    private current: Screen | null = null;
+    private current: Screen<never> | null = null;
     private currentWorld: Container | null = null;
     private currentUi: Container | null = null;
     private currentInput: PointerInput | null = null;
@@ -37,9 +37,12 @@ export class ScreenManager {
         this.stopResize = this.responsive.onResize(this.handleResize);
     }
 
-    /** Register a screen factory under a key. Returns `this` for chaining. */
-    register(name: string, factory: ScreenFactory): this {
-        this.factories.set(name, factory);
+    /**
+     * Register a screen factory under a key. Returns `this` for chaining.
+     * The factory receives the `params` passed to `start()` at transition time.
+     */
+    register<P>(name: string, factory: ScreenFactory<P>): this {
+        this.factories.set(name, factory as ScreenFactory<never>);
         return this;
     }
 
@@ -50,10 +53,12 @@ export class ScreenManager {
 
     /**
      * Transition to a screen: tear down the current one, then `init()` the next.
+     * `params` is handed to the new screen's factory and `init()` — use it to
+     * carry data across the transition (e.g. the final score).
      * If a newer transition starts while `init()` is still awaiting, the older
      * screen is abandoned and never activated.
      */
-    async start(name: string): Promise<void> {
+    async start<P>(name: string, params?: P): Promise<void> {
         const factory = this.factories.get(name);
         if (!factory) {
             throw new Error(`Unknown screen "${name}". Did you register it in registerScreens()?`);
@@ -71,7 +76,7 @@ export class ScreenManager {
 
         const input = new PointerInput(world, this.responsive);
 
-        const screen = factory();
+        const screen = (factory as ScreenFactory<P | undefined>)(params) as Screen<never>;
         this.current = screen;
         this.currentWorld = world;
         this.currentUi = ui;
@@ -93,7 +98,7 @@ export class ScreenManager {
         this.app.ticker.add(this.tick);
 
         try {
-            await screen.init(context);
+            await screen.init(context, params as never);
         } catch (error) {
             if (this.current === screen) this.disposeCurrent();
             throw error;

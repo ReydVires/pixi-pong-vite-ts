@@ -27,6 +27,10 @@ export const COLORS = {
     gameOver: 0xff0000,
     white: 0xffffff,
     black: 0x000000,
+    /** Pong playfield background. */
+    pong: 0x101828,
+    /** Pong center line + paddles. */
+    pongAccent: 0x4ade80,
 } as const;
 
 /** Unique keys used with `ScreenManager.register` and `ScreenManager.start`. */

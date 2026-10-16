@@ -38,10 +38,14 @@ export interface ScreenContext {
 /**
  * A screen (menu, level, ...) as a plain object composed of display
  * objects and behaviors — no inheritance from a scene base class.
+ *
+ * Screens may declare a `params` type: data handed over by the previous
+ * screen at transition time (e.g. the final score for a game-over screen).
+ * Screens that don't need data use the default `void`.
  */
-export interface Screen {
+export interface Screen<P = void> {
     /** Build the screen. May be async to load assets; `update()` runs meanwhile. */
-    init(context: ScreenContext): Promise<void> | void;
+    init(context: ScreenContext, params: P): Promise<void> | void;
 
     /** Optional per-frame hook, called while the screen is active. `dt` in milliseconds. */
     update?(dt: number): void;
@@ -53,4 +57,4 @@ export interface Screen {
     destroy?(): void;
 }
 
-export type ScreenFactory = () => Screen;
+export type ScreenFactory<P = void> = (params: P) => Screen<P>;
