@@ -1,0 +1,138 @@
+import { Container, Ticker } from 'pixi.js';
+import type { Application } from 'pixi.js';
+import type { AssetLoader } from '../assets/AssetLoader';
+import { PointerInput } from '../input/PointerInput';
+import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
+import type { Unsubscribe } from '../responsive/layout';
+import type { Screen, ScreenContext, ScreenFactory } from './Screen';
+
+/**
+ * Owns the lifecycle of screens: registration, transitions, teardown
+ * and per-frame updates of whichever screen is currently active.
+ *
+ * Every screen gets a `world` and a `ui` container mounted into the matching
+ * responsive layer, so content automatically follows the viewport transform.
+ *
+ * Transition guarantees:
+ * - the outgoing screen's `destroy()` runs before the incoming `init()`,
+ * - its containers (and therefore all of its display objects) are destroyed,
+ * - its listeners are gone (they live on the containers),
+ * - `update()` only ever reaches the active screen.
+ */
+export class ScreenManager {
+    private readonly factories = new Map<string, ScreenFactory>();
+    private readonly stopResize: Unsubscribe;
+    private current: Screen | null = null;
+    private currentWorld: Container | null = null;
+    private currentUi: Container | null = null;
+    private currentInput: PointerInput | null = null;
+    private currentName: string | null = null;
+
+    constructor(
+        private readonly app: Application,
+        private readonly assets: AssetLoader,
+        private readonly responsive: Responsive,
+    ) {
+        // Forward viewport changes to whichever screen is active.
+        this.stopResize = this.responsive.onResize(this.handleResize);
+    }
+
+    /** Register a screen factory under a key. Returns `this` for chaining. */
+    register(name: string, factory: ScreenFactory): this {
+        this.factories.set(name, factory);
+        return this;
+    }
+
+    /** Key of the currently active screen, if any. */
+    get active(): string | null {
+        return this.currentName;
+    }
+
+    /**
+     * Transition to a screen: tear down the current one, then `init()` the next.
+     * If a newer transition starts while `init()` is still awaiting, the older
+     * screen is abandoned and never activated.
+     */
+    async start(name: string): Promise<void> {
+        const factory = this.factories.get(name);
+        if (!factory) {
+            throw new Error(`Unknown screen "${name}". Did you register it in registerScreens()?`);
+        }
+
+        this.disposeCurrent();
+
+        const world = new Container();
+        world.label = `${name}:world`;
+        this.responsive.world.addChild(world);
+
+        const ui = new Container();
+        ui.label = `${name}:ui`;
+        this.responsive.ui.addChild(ui);
+
+        const input = new PointerInput(world, this.responsive);
+
+        const screen = factory();
+        this.current = screen;
+        this.currentWorld = world;
+        this.currentUi = ui;
+        this.currentInput = input;
+        this.currentName = name;
+
+        const context: ScreenContext = {
+            app: this.app,
+            world,
+            ui,
+            screens: this,
+            assets: this.assets,
+            input,
+            responsive: this.responsive,
+        };
+
+        // Attach the ticker *before* init so async screens can animate
+        // (progress bars, spinners) while they are still loading.
+        this.app.ticker.add(this.tick);
+
+        try {
+            await screen.init(context);
+        } catch (error) {
+            if (this.current === screen) this.disposeCurrent();
+            throw error;
+        }
+    }
+
+    /** Tear down the active screen and stop forwarding resize events. Safe to call twice. */
+    dispose(): void {
+        this.stopResize();
+        this.disposeCurrent();
+    }
+
+    private readonly tick = (ticker: Ticker): void => {
+        this.current?.update?.(ticker.deltaMS);
+    };
+
+    private readonly handleResize = (viewport: ViewportMetrics): void => {
+        this.current?.onResize?.(viewport);
+    };
+
+    private disposeCurrent(): void {
+        this.app.ticker.remove(this.tick);
+
+        const screen = this.current;
+        const world = this.currentWorld;
+        const ui = this.currentUi;
+        const input = this.currentInput;
+        this.current = null;
+        this.currentWorld = null;
+        this.currentUi = null;
+        this.currentInput = null;
+        this.currentName = null;
+
+        try {
+            screen?.destroy?.();
+        } finally {
+            input?.destroy();
+            world?.destroy({ children: true });
+            ui?.destroy({ children: true });
+        }
+    }
+}

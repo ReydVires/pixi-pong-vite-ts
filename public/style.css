@@ -1,0 +1,29 @@
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.87);
+    background-color: #0f0f0f;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Pin the app to the visual viewport so mobile browser chrome doesn't reflow it. */
+#app {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+}
+
+/* Static layout container; the Responsive service sizes the canvas to it. */
+#game-container {
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+canvas {
+    display: block;
+}

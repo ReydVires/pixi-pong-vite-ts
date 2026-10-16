@@ -1,0 +1,21 @@
+{
+    "name": "template-vite-ts",
+    "description": "A PixiJS v8 TypeScript template using Vite.",
+    "version": "1.4.0",
+    "license": "MIT",
+    "licenseUrl": "http://www.opensource.org/licenses/mit-license.php",
+    "scripts": {
+        "dev": "vite --config vite/config.dev.mjs",
+        "build": "vite build --config vite/config.prod.mjs",
+        "dev-nolog": "vite --config vite/config.dev.mjs",
+        "build-nolog": "vite build --config vite/config.prod.mjs"
+    },
+    "devDependencies": {
+        "typescript": "~5.7.2",
+        "vite": "^6.3.1"
+    },
+    "dependencies": {
+        "pixi.js": "^8.22.0",
+        "terser": "^5.39.0"
+    }
+}

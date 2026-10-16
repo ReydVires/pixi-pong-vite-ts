@@ -1,0 +1,375 @@
+# PixiJS Vite TypeScript Template
+
+A small, batteries-included starter for 2D games built with **[PixiJS 8](https://pixijs.com)**,
+**[TypeScript 5.7](https://www.typescriptlang.org)** and **[Vite 6](https://vitejs.dev)**.
+It gives you the boring-but-important parts already wired up — screen transitions, asset
+loading, pointer input, and responsive scaling — so you can focus on making the game.
+
+> Never touched a game engine before? Read **[Your first 30 minutes](#your-first-30-minutes)**,
+> then the **[Cookbook](#cookbook-common-tasks)**. You'll be dangerous in no time.
+
+## What you get out of the box
+
+- 🧩 **Screens** with a clean lifecycle (`init` → `update` → `destroy`) and animated transitions
+- 🖥️ **Responsive scaling** that works on phones, tablets and desktop with no extra effort
+- 🎨 **Two layers** per screen: `world` (gameplay/backdrops) and `ui` (HUD/menus)
+- 📦 **Asset loader** with progress reporting (perfect for a loading bar)
+- 👆 **Pointer input** scoped to a screen, cleaned up automatically
+- 🧪 A **dev handle** (`window.game`) so you can poke at the running game from the console
+
+## Quick start
+
+**Prerequisites:** [Node.js 18+](https://nodejs.org) and npm.
+
+```bash
+npm install      # install dependencies
+npm run dev      # start the game in dev mode
+```
+
+Open the URL printed in the terminal (by default **http://localhost:8080**). Edit any file
+under `src/` and the browser hot-reloads instantly.
+
+```bash
+npm run build    # produce an optimized build in dist/
+```
+
+| Command         | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| `npm run dev`   | Start the dev server with hot reloading (port `8080`)  |
+| `npm run build` | Generate an optimized production build in `dist/`      |
+
+## Your first 30 minutes
+
+If you're new, do these in order:
+
+1. **Run it.** `npm install` then `npm run dev`.
+2. **Find the gameplay code.** Open `src/game/screens/GameScreen.ts` — this is "the game".
+   Change the message text, save, and watch it update live.
+3. **Understand the flow.** The game boots in `src/main.ts` → `Game.ts` → the `Preloader`
+   screen → `MainMenu` → `Game` → `GameOver`. Tap anywhere to advance between them.
+4. **Read one screen top to bottom.** `MainMenuScreen.ts` is the best example — it draws a
+   background, adds a spinning logo, shows text, and reacts to a tap and to resizing.
+5. **Make a change.** Follow a recipe in the **[Cookbook](#cookbook-common-tasks)** — e.g.
+   *"Show an image"* or *"React to a tap"*.
+
+## How the game boots
+
+```
+index.html
+   └── src/main.ts ............... waits for the DOM, then `new Game().start('game-container')`
+         └── Game.ts ............. composition root:
+               ├── Application ... the Pixi renderer + ticker
+               ├── AssetLoader ... loads and caches textures
+               ├── Responsive .... fits the canvas to the screen, world/ui layers
+               └── ScreenManager . owns the active screen and transitions
+                     └── Preloader → MainMenu → Game → GameOver
+```
+
+Everything long-lived is created once in `Game.ts`. Screens are created and destroyed as you
+move between them.
+
+## Project structure
+
+```
+src/
+├── main.ts                     Entry point — mounts the game on DOMContentLoaded
+└── game/
+    ├── Game.ts                 Composition root: creates the app + services, starts first screen
+    ├── config.ts               Resolution, colors, screen keys, asset registry, breakpoints
+    ├── core/                   Reusable engine plumbing (you rarely edit this)
+    │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
+    │   ├── input/              PointerInput — pointer events scoped to a screen
+    │   ├── assets/             AssetLoader — loading + texture registry with progress
+    │   ├── display/            Building blocks: Background, Image, Label, ProgressBar
+    │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
+    │   └── entities/           Entity + Component — composable per-frame behaviors
+    ├── components/             Gameplay components (e.g. Spin) you attach to entities
+    └── screens/                The actual game screens  ← most of your work happens here
+        ├── index.ts            Registers every screen with the ScreenManager
+        ├── PreloaderScreen.ts  Loads assets behind a progress bar
+        ├── MainMenuScreen.ts   Title screen (entity + Spin component demo)
+        ├── GameScreen.ts       The game itself
+        └── GameOverScreen.ts   Game over screen
+```
+
+Public files served as-is live in `public/` (e.g. `public/assets/bg.png`). The HTML shell is
+`index.html` and the page CSS is `public/style.css`.
+
+## Core concepts
+
+The template uses **composition** rather than deep class hierarchies. There are only four
+ideas you really need.
+
+### 1. Screens
+
+A screen is a plain object with a lifecycle. There's no base class to extend — just implement
+the parts you need:
+
+```ts
+export interface Screen {
+    init(context: ScreenContext): Promise<void> | void; // build it (may await assets)
+    update?(dt: number): void;                          // called every frame, dt in milliseconds
+    onResize?(viewport: ViewportMetrics): void;         // viewport changed
+    destroy?(): void;                                   // release subscriptions/resources
+}
+```
+
+The `ScreenContext` passed to `init()` is your toolbox:
+
+| Property      | What it is                                                            |
+| ------------- | --------------------------------------------------------------------- |
+| `world`       | Container for gameplay/backdrops (may extend past the design area)    |
+| `ui`          | Container for HUD/menus, drawn above `world`                          |
+| `assets`      | Load textures with progress: `await assets.load(ASSETS.logo)`         |
+| `input`       | Pointer events scoped to this screen: `input.once(...)` / `input.on(...)` |
+| `screens`     | Navigate: `screens.start(SCREENS.Game)`                               |
+| `responsive`  | Viewport info + `toWorld(pointerEvent)`                               |
+| `app`         | The raw Pixi `Application`, if you need the renderer/ticker directly  |
+
+`ScreenManager` handles the transition details for you: it destroys the outgoing screen's
+containers and listeners before building the next one, and only ticks the active screen.
+
+### 2. `world` vs `ui` (and `Responsive`)
+
+Each screen draws into **two** containers:
+
+- **`world`** — the game world. It shares the design coordinate space, but the *visible* area
+  extends beyond the design bounds (the letterbox margins), so full-bleed backgrounds always
+  cover the screen. Put sprites, parallax and gameplay here.
+- **`ui`** — HUD, buttons, menus. Drawn on top of `world`. Keep interactive elements inside
+  the design area so they never get cut off.
+
+Both layers are scaled uniformly so the whole **768×1024 design area** is always visible and
+undistorted on any screen. See **[Responsive layout](#responsive-layout)** for the details.
+
+### 3. Entities & Components
+
+An `Entity` is a display object (a `Container`) that hosts small behaviors called
+`Component`s. Instead of subclassing, you mix behaviors onto an entity at runtime:
+
+```ts
+import { Entity } from '../core/entities/Entity';
+import { createImage } from '../core/display/Image';
+import { Spin } from '../components/Spin';
+
+const logo = new Entity();
+logo.addChild(createImage(assets.texture(ASSETS.logo)));
+logo.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y);
+logo.addComponent(new Spin(logo, { speed: 45 })); // rotates the entity every frame
+
+ui.addChild(logo);
+```
+
+The screen must tick entities from its own `update()`:
+
+```ts
+update(dt: number): void {
+    for (const entity of this.entities) entity.update(dt);
+}
+```
+
+A `Component` is any object with `update?(dt)` and/or `destroy?()` — see
+`src/game/components/Spin.ts` for a ~30-line example to copy.
+
+### 4. Config
+
+`src/game/config.ts` is the single place for numbers and registries you'll tweak often:
+
+- `GAME_WIDTH` / `GAME_HEIGHT` — the design resolution (portrait `768×1024` by default)
+- `SCREEN_CENTER` — handy `{ x, y }` for centering UI
+- `COLORS` — the palette
+- `SCREENS` — string keys for every screen (used by `screens.start(...)`)
+- `ASSETS` — the asset registry (alias → path)
+- `BREAKPOINTS` — mobile/tablet/desktop thresholds
+
+## Cookbook (common tasks)
+
+Copy-paste starting points. All snippets assume you're inside a screen's `init(context)`.
+
+### Add a new screen
+
+1. Add a key in `config.ts`:
+
+   ```ts
+   export const SCREENS = { /* ... */ Settings: 'Settings' } as const;
+   ```
+
+2. Create `src/game/screens/SettingsScreen.ts`:
+
+   ```ts
+   import type { Screen, ScreenContext } from '../core/screens/Screen';
+
+   export class SettingsScreen implements Screen {
+       init({ ui }: ScreenContext): void {
+           // build your UI here
+       }
+       destroy(): void {
+           // clean up anything you subscribed to
+       }
+   }
+   ```
+
+3. Register it in `src/game/screens/index.ts`:
+
+   ```ts
+   screens.register(SCREENS.Settings, () => new SettingsScreen());
+   ```
+
+4. Navigate to it from anywhere with `screens.start(SCREENS.Settings)`.
+
+### Show an image
+
+```ts
+import { createImage } from '../core/display/Image';
+
+const sprite = createImage(assets.texture(ASSETS.logo), {
+    x: SCREEN_CENTER.x,
+    y: SCREEN_CENTER.y,   // anchor defaults to 0.5 (centered)
+});
+ui.addChild(sprite);
+```
+
+### Show text
+
+```ts
+import { createLabel } from '../core/display/Label';
+
+const label = createLabel('Hello!', { fontSize: 48, fill: 0xffcc00 });
+label.anchor.set(0.5);
+label.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y);
+ui.addChild(label);
+```
+
+### Load an asset (with progress)
+
+Add it to the registry, then load it. Results are cached, so calling `load` again is free.
+
+```ts
+// config.ts
+export const ASSETS = { /* ... */ coin: { alias: 'coin', src: 'assets/coin.png' } };
+
+// in a screen
+const texture = await assets.load(ASSETS.coin, (progress) => bar.setProgress(progress));
+// later, synchronous access:
+const cached = assets.texture(ASSETS.coin);
+```
+
+Place the actual file in `public/assets/coin.png`.
+
+### React to a tap / click
+
+```ts
+this.stop = input.once((event) => {
+    void screens.start(SCREENS.Game);       // fires once, then unsubscribes
+});
+
+// or every click:
+this.stop = input.on((event) => {
+    const point = responsive.toWorld(event); // convert to world coordinates
+    console.log('clicked at', point.x, point.y);
+});
+```
+
+Remember to call `this.stop?.()` in the screen's `destroy()`.
+
+### Animate something every frame
+
+```ts
+update(dt: number): void {
+    // dt is milliseconds since the previous frame (≈16.7ms at 60fps)
+    sprite.rotation += 0.001 * dt;   // ~1 radian per second
+    sprite.x += 0.05 * dt;           // 50 pixels per second
+}
+```
+
+Prefer `dt`-based math over "per frame" so speed is consistent across devices. For reusable
+behavior, wrap it in a `Component` and attach it with `entity.addComponent(...)`.
+
+### React to resizing / breakpoints
+
+```ts
+onResize(viewport: ViewportMetrics): void {
+    if (viewport.breakpoint === 'mobile') {
+        this.title.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 100);
+    }
+}
+```
+
+See **[Responsive layout](#responsive-layout)** for everything `viewport` exposes.
+
+## Responsive layout
+
+The game is authored at a fixed **768×1024 (portrait)** design resolution
+(`GAME_WIDTH` / `GAME_HEIGHT` in `config.ts`). On any screen, `Responsive` applies a single
+uniform `containScale()` so the whole design area stays visible and undistorted — never
+stretched, never cropped.
+
+- **`context.world`** shares the design coordinate space, but the *visible* area extends past
+  the design bounds (the letterbox margins). Size full-bleed artwork to
+  `responsive.visibleBounds` and it always covers the screen — `createColorBackground` /
+  `createTextureBackground` already do this.
+- **`context.ui`** is drawn above the world. Keep interactive elements inside the 768×1024
+  design area so they stay on screen.
+- **`Screen.onResize(viewport)`** fires on every resize/orientation change.
+- `viewport` exposes `scale`, `visible`, `visibleBounds`, `orientation` (`portrait` /
+  `landscape`) and `breakpoint` (`mobile` / `tablet` / `desktop`, measured by the shortest
+  side so rotation doesn't flip it). Watch breakpoint changes with
+  `responsive.onBreakpointChange(cb)`.
+- Use `responsive.toWorld(pointerEvent)` to convert a pointer position into world coordinates.
+
+```ts
+// in a screen
+const { world, ui, responsive } = context;
+
+world.addChild(createTextureBackground(texture, responsive)); // full-bleed backdrop
+ui.addChild(menuButton);                                       // always on screen
+
+onResize(viewport: ViewportMetrics) {
+    // viewport.breakpoint === 'mobile' | 'tablet' | 'desktop'
+}
+```
+
+Want a different orientation? Swap `GAME_WIDTH` / `GAME_HEIGHT` in `config.ts` (e.g. `1024×768`
+for landscape) — everything else adapts automatically.
+
+## Loading static files
+
+To load static files such as images, audio or video, place them into `public/assets/`, then
+reference them through the asset registry in `src/game/config.ts` and load them through
+`context.assets`:
+
+```ts
+// config.ts
+export const ASSETS = {
+    background: { alias: 'background', src: 'assets/bg.png' },
+    logo: { alias: 'logo', src: 'assets/logo.png' },
+};
+
+// in a screen
+const texture = await context.assets.load(ASSETS.logo, (progress) => bar.setProgress(progress));
+```
+
+## Debugging tips
+
+- In **dev builds only**, the running game is exposed as `window.game`. From the browser
+  console you can do things like `game.screens.active`, `game.responsive.viewport`, or even
+  `game.screens.start('Game')`. This is stripped from production builds.
+- Hot reload is on: change a color or a coordinate, save, and see it instantly.
+- If a screen looks empty, check that you `addChild`'d to `world` or `ui` (not to nowhere),
+  and that anything you want to move every frame is ticked from `update(dt)`.
+
+## Conventions
+
+- **Keep gameplay in `src/game/screens/`.** `src/game/core/` is engine plumbing — treat it as
+  stable and extend it only when it genuinely helps.
+- **One screen per file**, named `SomethingScreen.ts`, registered in `screens/index.ts`.
+- **New assets** always go through `config.ts` (`ASSETS`) — never hard-code paths in screens.
+- **Clean up after yourself** in `destroy()`: unsubscribe from `input` and any
+  `responsive.onResize(...)` listeners you created.
+- **Scale by `dt`**, not by frame count.
+
+## Resources
+
+- [PixiJS Docs](https://pixijs.com/8.x/guides)
+- [PixiJS Examples](https://pixijs.playground.pixijs.com)
+- [Vite Docs](https://vitejs.dev/guide)
