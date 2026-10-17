@@ -1,8 +1,9 @@
-import { Graphics } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { Ball } from '../components/Ball';
 import { Paddle } from '../components/Paddle';
 import { PaddleAI } from '../components/PaddleAI';
 import { PaddleController } from '../components/PaddleController';
+import { PaddleKeys } from '../components/PaddleKeys';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground } from '../core/display/Background';
 import { createLabel } from '../core/display/Label';
@@ -19,18 +20,22 @@ const PADDLE_INSET = 60;
 /**
  * Pong — a concrete demo of the template's composition model.
  *
- * One screen, three entities, five components:
+ * One screen, three entities, six components:
  * - ball: `Ball` (motion + wall bounces)
- * - player paddle: `Paddle` + `PaddleController` (pointer-driven)
+ * - player paddle: `Paddle` + `PaddleController` (pointer) + `PaddleKeys` (keyboard)
  * - AI paddle: `Paddle` + `PaddleAI` (tracks the ball, capped speed)
  *
+ * Both paddles have **edge power zones**: a hit near a paddle's edge reflects
+ * harder and at a steeper angle than a center hit — risk/reward aiming.
+ *
  * The screen itself only does what no component can: collision checks,
- * scoring, serving and the win/lose transition.
+ * scoring, serving, pausing and the win/lose transition.
  */
 export class PongScreen implements Screen {
     private readonly entities: Entity[] = [];
     private stopMove: Unsubscribe | null = null;
     private stopServe: Unsubscribe | null = null;
+    private stopPauseKey: Unsubscribe | null = null;
     private screens: ScreenContext['screens'] | null = null;
 
     private ballMotion: Ball | null = null;
@@ -47,8 +52,12 @@ export class PongScreen implements Screen {
     /** ms remaining before the ball auto-serves. */
     private serveCountdown = 1200;
 
+    /** Pause state: while paused, gameplay stops ticking and an overlay shows. */
+    private paused = false;
+    private pauseOverlay: Container | null = null;
+
     init(context: ScreenContext, _params: void): void {
-        const { world, ui, input, responsive, screens } = context;
+        const { world, ui, input, keyboard, responsive, screens } = context;
         this.screens = screens;
 
         world.addChild(createColorBackground(COLORS.pong, responsive));
@@ -72,6 +81,9 @@ export class PongScreen implements Screen {
             new Paddle(player, { bounds: { minX: 0, maxX: GAME_WIDTH } }),
         );
         const controller = player.addComponent(new PaddleController(this.playerPaddle));
+        player.addComponent(
+            new PaddleKeys(keyboard, this.playerPaddle, { left: 'ArrowLeft', right: 'ArrowRight' }),
+        );
         this.entities.push(player);
         this.playerEntity = player;
         world.addChild(player);
@@ -98,7 +110,9 @@ export class PongScreen implements Screen {
         this.scoreLabel.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 260);
         ui.addChild(this.scoreLabel);
 
-        this.hintLabel = createLabel('Portrait court · sides are walls · first to 5', { fontSize: 22 });
+        this.hintLabel = createLabel('Move / ←→ · edge hits = more power · ESC pauses', {
+            fontSize: 20,
+        });
         this.hintLabel.anchor.set(0.5);
         this.hintLabel.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 260);
         ui.addChild(this.hintLabel);
@@ -108,8 +122,15 @@ export class PongScreen implements Screen {
             controller.moveTo(responsive.toWorld(event).x);
         });
         this.stopServe = input.on(() => {
+            if (this.paused) return;
             if (this.serving) this.serve();
         });
+        this.stopPauseKey = keyboard.onKeyDown('Escape', () => this.togglePause());
+
+        // --- Pause overlay (hidden until ESC) --------------------------------
+        this.pauseOverlay = this.createPauseOverlay();
+        this.pauseOverlay.visible = false;
+        ui.addChild(this.pauseOverlay);
 
         // Ball waits on the center line until the player taps to serve.
         this.ballMotion.velocityX = 0;
@@ -117,6 +138,8 @@ export class PongScreen implements Screen {
     }
 
     update(dt: number): void {
+        if (this.paused) return; // freeze gameplay while the pause overlay is up
+
         for (const entity of this.entities) {
             entity.update(dt);
         }
@@ -141,8 +164,10 @@ export class PongScreen implements Screen {
     destroy(): void {
         this.stopMove?.();
         this.stopServe?.();
+        this.stopPauseKey?.();
         this.stopMove = null;
         this.stopServe = null;
+        this.stopPauseKey = null;
         this.screens = null;
         this.entities.length = 0;
         this.ballMotion = null;
@@ -153,6 +178,65 @@ export class PongScreen implements Screen {
         this.aiPaddle = null;
         this.scoreLabel = null;
         this.hintLabel = null;
+        this.pauseOverlay = null;
+    }
+
+    /** Show/hide the pause overlay. Gameplay freezes while paused. */
+    private togglePause(): void {
+        if (!this.pauseOverlay) return;
+
+        this.paused = !this.paused;
+        this.pauseOverlay.visible = this.paused;
+    }
+
+    /** Dimmed overlay with Resume / Exit buttons. */
+    private createPauseOverlay(): Container {
+        const overlay = new Container();
+
+        const dim = new Graphics().rect(0, 0, GAME_WIDTH, GAME_HEIGHT).fill({ color: COLORS.black, alpha: 0.6 });
+        overlay.addChild(dim);
+
+        const title = createLabel('Paused', { fontSize: 56 });
+        title.anchor.set(0.5);
+        title.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 120);
+        overlay.addChild(title);
+
+        const resume = this.createPauseButton('Resume', SCREEN_CENTER.y - 20, () => this.togglePause());
+        const exit = this.createPauseButton('Exit to Menu', SCREEN_CENTER.y + 80, () => {
+            this.paused = false;
+            void this.screens?.start(SCREENS.MainMenu);
+        });
+        overlay.addChild(resume, exit);
+
+        return overlay;
+    }
+
+    /** A simple tappable pause-menu button. */
+    private createPauseButton(text: string, y: number, onTap: () => void): Container {
+        const button = new Container();
+        button.eventMode = 'static';
+        button.cursor = 'pointer';
+
+        const background = new Graphics()
+            .roundRect(-140, -34, 280, 68, 16)
+            .fill(COLORS.pongAccent)
+            .stroke({ width: 3, color: COLORS.white });
+        // White text with a *thin* dark outline. The createLabel default is an
+        // 8px stroke, which at a 28px font is nearly a third of the glyph and
+        // turns the letters into a heavy, soft blob — especially when the fill
+        // was also black. A proportional outline keeps small text crisp.
+        const label = createLabel(text, {
+            fontSize: 28,
+            fill: COLORS.white,
+            stroke: { color: COLORS.black, width: 3 },
+        });
+        label.anchor.set(0.5);
+
+        button.addChild(background, label);
+        button.position.set(SCREEN_CENTER.x, y);
+        button.on('pointerdown', onTap);
+
+        return button;
     }
 
     /** Launch the ball from the center toward the player. */
@@ -170,6 +254,44 @@ export class PongScreen implements Screen {
         }
     }
 
+    /**
+     * AABB check against both paddles.
+     *
+     * Edge power zones: the further from a paddle's center the ball lands,
+     * the harder and steeper the return — hitting the outer edge reverses the
+     * angle sharply and adds the most power. Center hits are soft and flat.
+     */
+    private handlePaddleHits(): void {
+        const ball = this.ballMotion;
+        const ballEntity = this.ballEntity;
+        if (!ball || !ballEntity) return;
+
+        for (const [paddleEntity, paddle] of [
+            [this.playerEntity, this.playerPaddle],
+            [this.aiEntity, this.aiPaddle],
+        ] as const) {
+            if (!paddleEntity || !paddle) continue;
+
+            const dx = ballEntity.x - paddleEntity.x;
+            const dy = ballEntity.y - paddleEntity.y;
+
+            if (Math.abs(dx) < paddle.halfWidth + ball.radius && Math.abs(dy) < paddle.height / 2 + ball.radius) {
+                // Push the ball out so it doesn't stick, then bounce.
+                ballEntity.y = paddleEntity.y + Math.sign(dy) * (paddle.height / 2 + ball.radius);
+                ball.bounceY();
+
+                // Hit offset along the paddle: -1 (left edge) .. +1 (right edge).
+                const offset = Math.max(-1, Math.min(1, dx / paddle.halfWidth));
+                // Angle: edge hits steer the ball sideways much harder.
+                ball.velocityX += offset * 320;
+                // Power: edge hits add a speed burst (the "reverse" kick).
+                const edgePower = Math.abs(offset);
+                ball.velocityX += Math.sign(dx || 1) * edgePower * 200;
+                ball.velocityY += Math.sign(ball.velocityY) * edgePower * 120;
+            }
+        }
+    }
+
     /** Bounce off the left/right walls (the screen's edges of the playfield). */
     private handleWallBounce(): void {
         const ball = this.ballMotion;
@@ -182,32 +304,6 @@ export class PongScreen implements Screen {
         } else if (entity.x + ball.radius > GAME_WIDTH && ball.directionX > 0) {
             entity.x = GAME_WIDTH - ball.radius;
             ball.bounceX();
-        }
-    }
-
-    /** Simple AABB check against both paddles; bounce the ball away. */
-    private handlePaddleHits(): void {
-        const ball = this.ballMotion;
-        const ballEntity = this.ballEntity;
-        if (!ball || !ballEntity) return;
-
-        for (const [paddleEntity, paddle] of [
-            [this.playerEntity, this.playerPaddle],
-            [this.aiEntity, this.aiPaddle],
-        ] as const) {
-            if (!paddleEntity || !paddle) continue;
-
-            const dx = Math.abs(ballEntity.x - paddleEntity.x);
-            const dy = Math.abs(ballEntity.y - paddleEntity.y);
-
-            if (dx < paddle.halfWidth + ball.radius && dy < paddle.height / 2 + ball.radius) {
-                // Push the ball out so it doesn't stick, then bounce.
-                ballEntity.y =
-                    paddleEntity.y + Math.sign(ballEntity.y - paddleEntity.y) * (paddle.height / 2 + ball.radius);
-                ball.bounceY();
-                // Angle the return based on where it hit the paddle.
-                ball.velocityX += ((ballEntity.x - paddleEntity.x) / paddle.halfWidth) * 160;
-            }
         }
     }
 

@@ -1,5 +1,6 @@
 import type { Application, Container } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader';
+import type { KeyboardInput } from '../input/KeyboardInput';
 import type { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 import type { ScreenManager } from './ScreenManager';
@@ -27,6 +28,9 @@ export interface ScreenContext {
 
     /** Pointer input scoped to this screen (already bound to a full-screen hit area). */
     readonly input: PointerInput;
+
+    /** Keyboard input scoped to this screen. Unsubscribe in `destroy()`. */
+    readonly keyboard: KeyboardInput;
 
     /** Asset access with progress reporting. */
     readonly assets: AssetLoader;

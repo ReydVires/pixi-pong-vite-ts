@@ -1,6 +1,7 @@
 import { Container, Ticker } from 'pixi.js';
 import type { Application } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader';
+import { KeyboardInput } from '../input/KeyboardInput';
 import { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 import type { Unsubscribe } from '../responsive/layout';
@@ -26,6 +27,7 @@ export class ScreenManager {
     private currentWorld: Container | null = null;
     private currentUi: Container | null = null;
     private currentInput: PointerInput | null = null;
+    private currentKeyboard: KeyboardInput | null = null;
     private currentName: string | null = null;
 
     constructor(
@@ -75,12 +77,14 @@ export class ScreenManager {
         this.responsive.ui.addChild(ui);
 
         const input = new PointerInput(world, this.responsive);
+        const keyboard = new KeyboardInput();
 
         const screen = (factory as ScreenFactory<P | undefined>)(params) as Screen<never>;
         this.current = screen;
         this.currentWorld = world;
         this.currentUi = ui;
         this.currentInput = input;
+        this.currentKeyboard = keyboard;
         this.currentName = name;
 
         const context: ScreenContext = {
@@ -90,6 +94,7 @@ export class ScreenManager {
             screens: this,
             assets: this.assets,
             input,
+            keyboard,
             responsive: this.responsive,
         };
 
@@ -126,15 +131,18 @@ export class ScreenManager {
         const world = this.currentWorld;
         const ui = this.currentUi;
         const input = this.currentInput;
+        const keyboard = this.currentKeyboard;
         this.current = null;
         this.currentWorld = null;
         this.currentUi = null;
         this.currentInput = null;
+        this.currentKeyboard = null;
         this.currentName = null;
 
         try {
             screen?.destroy?.();
         } finally {
+            keyboard?.destroy();
             input?.destroy();
             world?.destroy({ children: true });
             ui?.destroy({ children: true });

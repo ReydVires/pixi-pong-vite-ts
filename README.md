@@ -15,6 +15,8 @@ loading, pointer input, and responsive scaling — so you can focus on making th
 - 🎨 **Two layers** per screen: `world` (gameplay/backdrops) and `ui` (HUD/menus)
 - 📦 **Asset loader** with progress reporting (perfect for a loading bar)
 - 👆 **Pointer input** scoped to a screen, cleaned up automatically
+- ⌨️ **Keyboard input** scoped to a screen (`isDown` polling + `onKeyDown` events)
+- ⏸️ **Pause pattern** — ESC freezes gameplay and shows an overlay with Resume/Exit
 - 🧪 A **dev handle** (`window.game`) so you can poke at the running game from the console
 
 ## Quick start
@@ -79,7 +81,7 @@ src/
     ├── config.ts               Resolution, colors, screen keys, asset registry, breakpoints
     ├── core/                   Reusable engine plumbing (you rarely edit this)
     │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
-    │   ├── input/              PointerInput — pointer events scoped to a screen
+    │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
     │   ├── assets/             AssetLoader — loading + texture registry with progress
     │   ├── display/            Building blocks: Background, Image, Label, ProgressBar
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
@@ -123,6 +125,7 @@ The `ScreenContext` passed to `init()` is your toolbox:
 | `ui`          | Container for HUD/menus, drawn above `world`                          |
 | `assets`      | Load textures with progress: `await assets.load(ASSETS.logo)`         |
 | `input`       | Pointer events scoped to this screen: `input.once(...)` / `input.on(...)` |
+| `keyboard`    | Keyboard scoped to this screen: `keyboard.isDown('ArrowLeft')`, `keyboard.onKeyDown('Escape', cb)` |
 | `screens`     | Navigate: `screens.start(SCREENS.Game)`                               |
 | `responsive`  | Viewport info + `toWorld(pointerEvent)`                               |
 | `app`         | The raw Pixi `Application`, if you need the renderer/ticker directly  |
@@ -308,6 +311,52 @@ this.stop = input.on((event) => {
 
 Remember to call `this.stop?.()` in the screen's `destroy()`.
 
+### React to the keyboard
+
+`context.keyboard` is scoped to the screen like `input`. Poll held keys from
+`update()` for continuous control, or subscribe for one-shot presses:
+
+```ts
+// Continuous: move while the key is held (see PaddleKeys component).
+update(dt: number): void {
+    if (keyboard.isDown('ArrowLeft')) this.paddle.x -= 0.5 * dt;
+}
+
+// One-shot: fire on each press.
+this.stopKey = keyboard.onKeyDown('Escape', () => this.togglePause());
+```
+
+Unsubscribe in `destroy()` — keyboard listeners live on `window`, so the screen
+manager cannot clean them up for you.
+
+### Pause the game (ESC + overlay)
+
+The pattern used by `PongScreen`: a hidden overlay container in `ui`, ESC
+toggles it, and `update()` returns early while paused so gameplay freezes:
+
+```ts
+init({ ui, keyboard }: ScreenContext): void {
+    this.pauseOverlay = this.createPauseOverlay(); // dim + Resume/Exit buttons
+    this.pauseOverlay.visible = false;
+    ui.addChild(this.pauseOverlay);
+    this.stopKey = keyboard.onKeyDown('Escape', () => this.togglePause());
+}
+
+update(dt: number): void {
+    if (this.paused) return;   // freeze gameplay
+    // ...normal per-frame work
+}
+
+togglePause(): void {
+    this.paused = !this.paused;
+    this.pauseOverlay.visible = this.paused;
+}
+```
+
+Buttons in the overlay are plain containers with `eventMode = 'static'` and a
+`pointerdown` handler — see `PongScreen.createPauseButton()`. "Exit" simply
+calls `screens.start(SCREENS.MainMenu)`.
+
 ### Animate something every frame
 
 ```ts
@@ -400,8 +449,8 @@ const texture = await context.assets.load(ASSETS.logo, (progress) => bar.setProg
   stable and extend it only when it genuinely helps.
 - **One screen per file**, named `SomethingScreen.ts`, registered in `screens/index.ts`.
 - **New assets** always go through `config.ts` (`ASSETS`) — never hard-code paths in screens.
-- **Clean up after yourself** in `destroy()`: unsubscribe from `input` and any
-  `responsive.onResize(...)` listeners you created.
+- **Clean up after yourself** in `destroy()`: unsubscribe from `input`,
+  `keyboard` and any `responsive.onResize(...)` listeners you created.
 - **Scale by `dt`**, not by frame count.
 
 ## Resources

@@ -46,6 +46,11 @@ export class Paddle implements Component {
         this.targetX = x;
     }
 
+    /** The current target x (useful for relative nudges from keyboard control). */
+    getTargetX(): number {
+        return this.targetX;
+    }
+
     /** Update the playfield bounds (e.g. when the viewport resizes). */
     setBounds(bounds: { minX: number; maxX: number }): void {
         this.bounds = bounds;
