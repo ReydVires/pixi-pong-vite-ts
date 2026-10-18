@@ -24,7 +24,9 @@ export class MainMenuScreen implements Screen {
 
         // Menu chrome lives in the ui layer, always inside the design area.
         const logo = new Entity();
-        logo.addChild(createImage(assets.texture(ASSETS.logo)));
+        const logoImage = createImage(assets.texture(ASSETS.logo));
+        logoImage.setSize(0.5 * logoImage.width, 0.5 * logoImage.height);
+        logo.addChild(logoImage);
         logo.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 200);
         // Two behaviors composed onto one entity — they stack automatically.
         logo.addComponent(new Spin(logo, { speed: 30 }));

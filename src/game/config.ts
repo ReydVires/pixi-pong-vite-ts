@@ -44,5 +44,5 @@ export const SCREENS = {
 /** Registry of static assets. Keep every alias/path here so it is easy to swap. */
 export const ASSETS = {
     background: { alias: 'background', src: 'assets/bg.png' },
-    logo: { alias: 'logo', src: 'assets/logo.png' },
+    logo: { alias: 'logo', src: 'assets/logo.svg' },
 } as const;

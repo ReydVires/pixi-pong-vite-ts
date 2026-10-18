@@ -19,7 +19,7 @@ export interface LabelOptions extends Omit<Partial<TextStyleOptions>, 'stroke'> 
  */
 const DEFAULT_STROKE = {
     color: COLORS.black,
-    width: 8,
+    width: 4,
     join: 'round',
 } as const;
 
