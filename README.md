@@ -18,6 +18,7 @@ loading, pointer input, and responsive scaling — so you can focus on making th
 - 👆 **Pointer input** scoped to a screen, cleaned up automatically
 - ⌨️ **Keyboard input** scoped to a screen (`isDown` polling + `onKeyDown` events)
 - ⏸️ **Pause pattern** — ESC freezes gameplay and shows an overlay with Resume/Exit
+- ⚡ An **instant HTML splash** while the Pixi engine downloads as a separate async chunk
 - 🧪 A **dev handle** (`window.game`) so you can poke at the running game from the console
 
 ## Quick start
@@ -63,11 +64,11 @@ If you're new, do these in order:
 ## How the game boots
 
 ```
-index.html
-   └── src/main.ts ............... waits for the DOM, then `new Game().start('game-container')`
-         └── Game.ts ............. composition root:
+index.html .................... paints the loading splash instantly (no JS required)
+   └── src/main.ts ............. tiny bootstrap; `import('./game/Game')` loads the engine lazily
+         └── Game.ts ........... composition root (ships as its own async chunk):
                ├── Application ... the Pixi renderer + ticker
-               ├── AssetLoader ... loads and caches textures
+               ├── AssetLoader ... loads and caches textures + web fonts
                ├── Responsive .... fits the canvas to the screen, world/ui layers
                └── ScreenManager . owns the active screen and transitions
                      └── Preloader → MainMenu → Game → GameOver
@@ -75,6 +76,32 @@ index.html
 
 Everything long-lived is created once in `Game.ts`. Screens are created and destroyed as you
 move between them.
+
+## Load time & code splitting
+
+`src/main.ts` deliberately keeps its only import of the engine **dynamic**:
+
+```ts
+const gameModule = import('./game/Game'); // a separate async chunk, not part of the entry
+```
+
+Because of that, the initial download is just a few KB (the bootstrap plus the HTML/CSS), so the
+`#splash` element in `index.html` paints and animates immediately while the ~600 KB Pixi engine
+streams in behind it. When the renderer has mounted, `Game.start()` calls its `onReady`
+callback and the splash is removed — a seamless hand-off, since the splash background matches
+`CLEAR_COLOR`.
+
+`vite/config.prod.mjs` keeps the split efficient:
+
+- **`pixi.js` is its own chunk**, separate from your game code, so repeat visitors only
+  re-download the small game chunk when you change gameplay. (This is what `manualChunks` is
+  actually good for — caching, not lazy-loading.)
+- **Vite's preload helper is isolated** into its own tiny chunk. Without that, the entry would
+  statically depend on the pixi chunk, and the browser would preload all ~600 KB *before* the
+  splash could even paint.
+
+The same trick works anywhere: wrap any `import(...)` and that module becomes its own chunk,
+fetched on demand.
 
 ## Project structure
 

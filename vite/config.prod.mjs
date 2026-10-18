@@ -22,9 +22,15 @@ export default defineConfig({
     build: {
         rollupOptions: {
             output: {
-                manualChunks: {
-                    pixi: ['pixi.js']
-                }
+                manualChunks(id) {
+                    // Isolate Vite's preload helper. It is shared by the entry and
+                    // by pixi.js (which has internal dynamic imports); left to
+                    // Rollup it lands inside the pixi chunk, which then makes the
+                    // tiny entry statically depend on ~600 KB of engine code.
+                    if (id.includes('preload-helper')) return 'preload-helper';
+
+                    if (id.includes('node_modules/pixi.js')) return 'pixi';
+                },
             }
         },
         minify: 'terser',

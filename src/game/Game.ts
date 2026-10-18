@@ -5,6 +5,16 @@ import { Responsive } from './core/responsive/Responsive';
 import { ScreenManager } from './core/screens/ScreenManager';
 import { registerScreens } from './screens';
 
+/** Options for {@link Game.start}. */
+export interface GameOptions {
+    /**
+     * Called once the renderer is mounted and drawing, just before the first
+     * screen loads its assets. Use it to hide a DOM loading splash or fade the
+     * canvas in.
+     */
+    onReady?: () => void;
+}
+
 /**
  * Composition root: builds the Pixi application and every long-lived
  * service, wires the screens together, and starts the first screen.
@@ -22,7 +32,7 @@ export class Game {
     }
 
     /** Initialize the renderer, mount the canvas and start the first screen. */
-    async start(parentId: string): Promise<this> {
+    async start(parentId: string, options: GameOptions = {}): Promise<this> {
         const parent = document.getElementById(parentId);
         if (!parent) {
             throw new Error(`Game parent element "#${parentId}" not found in the DOM.`);
@@ -46,6 +56,9 @@ export class Game {
         if (import.meta.env.DEV) {
             (globalThis as { game?: Game }).game = this;
         }
+
+        // The renderer is up — let the host hide its loading splash.
+        options.onReady?.();
 
         await this.screens.start(SCREENS.Preloader);
         return this;
