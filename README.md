@@ -14,6 +14,7 @@ loading, pointer input, and responsive scaling — so you can focus on making th
 - 🖥️ **Responsive scaling** that works on phones, tablets and desktop with no extra effort
 - 🎨 **Two layers** per screen: `world` (gameplay/backdrops) and `ui` (HUD/menus)
 - 📦 **Asset loader** with progress reporting (perfect for a loading bar)
+- 🔤 **Bundled web font** (Titan One) loaded before any text, so labels look identical everywhere
 - 👆 **Pointer input** scoped to a screen, cleaned up automatically
 - ⌨️ **Keyboard input** scoped to a screen (`isDown` polling + `onKeyDown` events)
 - ⏸️ **Pause pattern** — ESC freezes gameplay and shows an overlay with Resume/Exit
@@ -86,7 +87,7 @@ src/
     ├── core/                   Reusable engine plumbing (you rarely edit this)
     │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
     │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
-    │   ├── assets/             AssetLoader — loading + texture registry with progress
+    │   ├── assets/             AssetLoader — texture + web-font registry with progress
     │   ├── display/            Building blocks: Background, Image, Label, ProgressBar
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   └── entities/           Entity + Component — composable per-frame behaviors
@@ -127,7 +128,7 @@ The `ScreenContext` passed to `init()` is your toolbox:
 | ------------- | --------------------------------------------------------------------- |
 | `world`       | Container for gameplay/backdrops (may extend past the design area)    |
 | `ui`          | Container for HUD/menus, drawn above `world`                          |
-| `assets`      | Load textures with progress: `await assets.load(ASSETS.logo)`         |
+| `assets`      | Load assets with progress: `await assets.load(ASSETS.logo)`, `await assets.loadFont(FONTS.display)` |
 | `input`       | Pointer events scoped to this screen: `input.once(...)` / `input.on(...)` |
 | `keyboard`    | Keyboard scoped to this screen: `keyboard.isDown('ArrowLeft')`, `keyboard.onKeyDown('Escape', cb)` |
 | `screens`     | Navigate: `screens.start(SCREENS.Game)`                               |
@@ -217,7 +218,8 @@ A `Component` is any object with `update?(dt)` and/or `destroy?()` — see
 - `SCREEN_CENTER` — handy `{ x, y }` for centering UI
 - `COLORS` — the palette
 - `SCREENS` — string keys for every screen (used by `screens.start(...)`)
-- `ASSETS` — the asset registry (alias → path)
+- `ASSETS` — the texture registry (alias → path)
+- `FONTS` — the web-font registry (alias → file + family); `FONT_FAMILY` is the face labels use
 - `BREAKPOINTS` — mobile/tablet/desktop thresholds
 
 ## Cookbook (common tasks)
@@ -298,6 +300,31 @@ const cached = assets.texture(ASSETS.coin);
 ```
 
 Place the actual file in `public/assets/coin.png`.
+
+### Add a web font
+
+The template bundles **Titan One** (`public/assets/fonts/titan-one.woff2`, OFL-licensed) and
+loads it in the preloader, so labels look identical on every device. To swap it or add a face:
+
+1. Drop the `.woff2` into `public/assets/fonts/` (keep its license file alongside it).
+2. Register it in `config.ts`, and point `FONT_FAMILY` at the family name:
+
+   ```ts
+   export const FONT_FAMILY = 'Bungee';
+   export const FONTS = {
+       display: { alias: 'font-display', src: 'assets/fonts/bungee.woff2', family: FONT_FAMILY },
+   };
+   ```
+
+3. Load it **before creating any text**:
+
+   ```ts
+   await assets.loadFont(FONTS.display);
+   ```
+
+Text created before the face resolves silently falls back to a browser default, so always
+`await assets.loadFont(...)` up front (the preloader already does). Prefer an OFL/free font so
+you can ship it; Pixi registers the `FontFace` for you — no CSS `@font-face` needed.
 
 ### React to a tap / click
 
@@ -437,6 +464,8 @@ export const ASSETS = {
 // in a screen
 const texture = await context.assets.load(ASSETS.logo, (progress) => bar.setProgress(progress));
 ```
+
+Web fonts work the same way through the `FONTS` registry — see **[Add a web font](#add-a-web-font)**.
 
 ## Debugging tips
 

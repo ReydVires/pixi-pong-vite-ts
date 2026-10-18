@@ -41,8 +41,23 @@ export const SCREENS = {
     GameOver: 'GameOver',
 } as const;
 
+/** Bundled text face. The preloader loads it before any label is created. */
+export const FONT_FAMILY = 'Titan One';
+
 /** Registry of static assets. Keep every alias/path here so it is easy to swap. */
 export const ASSETS = {
     background: { alias: 'background', src: 'assets/bg.png' },
     logo: { alias: 'logo', src: 'assets/logo.svg' },
+} as const;
+
+/**
+ * Registry of bundled web fonts. Drop a `.woff2` into `public/assets/fonts/`
+ * and list it here, then `await assets.loadFont(...)` before creating text.
+ */
+export const FONTS = {
+    display: {
+        alias: 'font-display',
+        src: 'assets/fonts/titan-one.woff2',
+        family: FONT_FAMILY,
+    },
 } as const;

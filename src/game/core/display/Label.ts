@@ -1,9 +1,6 @@
 import { Text } from 'pixi.js';
 import type { TextStyleOptions } from 'pixi.js';
-import { COLORS } from '../../config';
-
-/** Default face used across the template. */
-export const FONT_FAMILY = 'Arial Black';
+import { COLORS, FONT_FAMILY } from '../../config';
 
 /** Text style options, except `stroke` may also be `null` to disable the outline. */
 export interface LabelOptions extends Omit<Partial<TextStyleOptions>, 'stroke'> {

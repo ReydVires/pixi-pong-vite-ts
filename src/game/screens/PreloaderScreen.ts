@@ -1,4 +1,4 @@
-import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
+import { ASSETS, COLORS, FONTS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/Background';
 import { ProgressBar } from '../core/display/ProgressBar';
 import type { Screen, ScreenContext } from '../core/screens/Screen';
@@ -16,7 +16,9 @@ export class PreloaderScreen implements Screen {
 
         world.addChild(createColorBackground(COLORS.clear, responsive));
 
-        // Phase 1: minimal backdrop asset so the loading UI has something behind it.
+        // Phase 1: load the display font first so every later label renders with
+        // it, then a minimal backdrop asset for the loading UI to sit on.
+        await assets.loadFont(FONTS.display);
         const background = await assets.load(ASSETS.background);
         world.addChild(createTextureBackground(background, responsive));
 
