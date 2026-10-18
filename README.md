@@ -25,11 +25,15 @@ loading, pointer input, and responsive scaling — so you can focus on making th
 
 ```bash
 npm install      # install dependencies
-npm run dev      # start the game in dev mode
+npm run dev      # start the dev server (opens your browser)
 ```
 
-Open the URL printed in the terminal (by default **http://localhost:8080**). Edit any file
-under `src/` and the browser hot-reloads instantly.
+Your browser opens **http://localhost:8080** automatically. Edit any file under `src/` and it
+hot-reloads instantly.
+
+If you run `npm run dev` again while the server is still running, it **reuses** that server
+and **refreshes the tab that's already open** instead of starting a second instance on another
+port. (Set `BROWSER=none` to suppress opening the browser, e.g. on a remote machine.)
 
 ```bash
 npm run build    # produce an optimized build in dist/
@@ -37,7 +41,7 @@ npm run build    # produce an optimized build in dist/
 
 | Command         | Description                                            |
 | --------------- | ------------------------------------------------------ |
-| `npm run dev`   | Start the dev server with hot reloading (port `8080`)  |
+| `npm run dev`   | Start the dev server (opens/refreshes the browser, port `8080`) |
 | `npm run build` | Generate an optimized production build in `dist/`      |
 
 ## Your first 30 minutes
