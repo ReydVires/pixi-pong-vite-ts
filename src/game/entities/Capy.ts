@@ -164,6 +164,16 @@ export class Capy extends Entity {
         if (this.type.harmful) {
             // Warning marker above the skull, clear of the ears.
             body.poly([0, -r * 1.15, r * 0.22, -r * 0.68, -r * 0.22, -r * 0.68], true).fill(COLORS.hazard);
+        } else if (this.type.effect === 'clear') {
+            // Four-point sparkle, the mirror of the hazard's spike: "this one is
+            // good news" has to read before the first tap, not after it.
+            const points: number[] = [];
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI / 4) * i - Math.PI / 2;
+                const arm = (i % 2 === 0 ? 0.26 : 0.095) * r;
+                points.push(Math.cos(angle) * arm, -r * 0.95 + Math.sin(angle) * arm);
+            }
+            body.poly(points, true).fill(COLORS.white).stroke({ width: 2, color: this.type.accent });
         }
 
         return body;

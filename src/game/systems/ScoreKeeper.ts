@@ -61,3 +61,16 @@ export function tapOutcome(type: CapyType, multiplier: number): TapOutcome {
     if (type.harmful) return { points: type.points, hit: false };
     return { points: type.points * multiplier, hit: true };
 }
+
+/**
+ * Points a clear effect farms from *each* capy it sweeps.
+ *
+ * Flat and type-blind by design: a `golden` pays the same for everything
+ * standing, so a swept `bomb` is a bounty rather than the −25 its own tap
+ * would have cost. Nothing about the swept capy changes the number.
+ *
+ * It is also not a whack — see `PlayScreen.clearField` — so it moves the score
+ * and nothing else, leaving the combo and the accuracy tally to the taps the
+ * player actually made.
+ */
+export const SWEEP_POINTS = 20;

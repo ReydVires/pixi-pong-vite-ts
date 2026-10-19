@@ -14,7 +14,8 @@ import { CAPY_TYPES } from '../levels/capyTypes';
 import { findStage } from '../levels/stages';
 import type { CapyTypeId, StageDef, TutorialStep } from '../levels/types';
 import { ComboTracker } from '../systems/ComboTracker';
-import { ScoreKeeper, starsFor, tapOutcome } from '../systems/ScoreKeeper';
+import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
+import type { TapOutcome } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
 import { SessionClock, secondsRemaining } from '../systems/SessionClock';
 import type { ResultsParams } from './ResultsScreen';
@@ -35,6 +36,14 @@ const WOUND_GRACE_MS = 1500;
  * in the stage table because it is a global feel knob, not a per-stage value.
  */
 const CLOCK_RATE = 1.25;
+/**
+ * Extra drain rate added for every miss.
+ *
+ * The clock is not a metronome — it leans on you. Each whiff, escape and
+ * mishit makes the rest of the stage tick away faster, so a sloppy run ends
+ * sooner than a clean one. A nudge, not a cliff: ten misses turn 1.25 into 1.5.
+ */
+const MISS_CLOCK_STEP = 0.025;
 /** Lifetime of a floating score popup, in ms. */
 const POPUP_MS = 700;
 
@@ -270,8 +279,7 @@ export class PlayScreen implements Screen<PlayParams> {
         // the moment before the first spawn, so it doesn't poison accuracy.
         if (y < HUD_ZONE_Y || this.spawned === 0) return;
 
-        this.misses += 1;
-        this.combo.recordMiss();
+        this.recordMiss();
         // Answered, not silent: without this the tap looks ignored, because the
         // only other sign is a combo label the player may not have had.
         this.addPopup('Miss!', x, y - 46, COLORS.hazard);
@@ -292,8 +300,9 @@ export class PlayScreen implements Screen<PlayParams> {
         }
 
         capy.markSettled();
-        this.award(capy);
+        this.apply(capy, tapOutcome(capy.type, this.combo.multiplier));
 
+        // The whole point of a `golden`: it takes the rest of the field with it.
         if (capy.type.effect === 'clear') this.clearField(capy);
 
         capy.emerge.retreat();
@@ -308,43 +317,77 @@ export class PlayScreen implements Screen<PlayParams> {
      * `flushRetired` spares hazards the miss it charges everything else.
      */
     private strikeHazard(capy: Capy): void {
-        const { points } = tapOutcome(capy.type, this.combo.multiplier);
-
         capy.flash();
         capy.markSettled();
-        this.score.add(points);
-        this.combo.recordMiss();
-        this.misses += 1;
-
-        this.spawnPopup(capy, points);
-        this.updateHud();
-
+        this.apply(capy, tapOutcome(capy.type, this.combo.multiplier));
         capy.emerge.retreat();
     }
 
-    /** A clear effect resolves everything else on the field. */
+    /**
+     * A clear effect sweeps the rest of the live field.
+     *
+     * Every capy still up pays the same flat, type-blind bounty — the `golden`
+     * does not care what it caught, so a bomb is a payout rather than a hazard.
+     * Nothing was tapped, so the sweep leaves the combo and the accuracy tally
+     * alone; it is points and a popup, nothing else.
+     *
+     * Only capys a tap could still have reached (`hittable`): one that has
+     * already started sinking escaped on its own, and sweeping it would hand
+     * back points *and* cancel the miss it has coming in `flushRetired`.
+     */
     private clearField(resolved: Capy): void {
         for (const capy of [...this.capys]) {
-            if (capy === resolved) continue;
+            if (capy === resolved || !capy.emerge.hittable) continue;
 
             capy.markSettled();
             if (!capy.type.harmful) {
                 capy.hitTarget.forceDown();
                 capy.refreshHealth();
-                this.award(capy);
             }
+
+            this.payBounty(capy, SWEEP_POINTS);
             capy.emerge.retreat();
         }
     }
 
-    private award(capy: Capy): void {
-        const { points } = tapOutcome(capy.type, this.combo.multiplier);
+    /**
+     * Apply one resolved interaction — the single place points, streak, the
+     * tally and the popup all move together.
+     *
+     * A non-scoring outcome can only come from deliberately tapping a hazard,
+     * so it counts against accuracy and breaks the streak.
+     */
+    private apply(capy: Capy, outcome: TapOutcome): void {
+        if (outcome.hit) {
+            this.combo.recordHit();
+            this.hits += 1;
+            this.stepWhacks += 1;
+        } else {
+            this.recordMiss();
+        }
 
+        this.payBounty(capy, outcome.points);
+    }
+
+    /**
+     * Charge one miss: the tally, the streak, and the clock.
+     *
+     * The one place a miss is recorded, so no path can forget one — every whiff,
+     * escape and mishit presses on the countdown alike, which is how a sloppy
+     * run ends up shorter than a clean one.
+     */
+    private recordMiss(): void {
+        this.misses += 1;
+        this.combo.recordMiss();
+        this.clock?.hurry(MISS_CLOCK_STEP);
+    }
+
+    /**
+     * Bank points without touching the combo or the tally — a bounty, not a
+     * tap. The one place score and popup stay in step for every payment.
+     */
+    private payBounty(capy: Capy, points: number): void {
         this.score.add(points);
-        this.combo.recordHit();
-        this.hits += 1;
-        this.stepWhacks += 1;
-
         this.spawnPopup(capy, points);
         this.updateHud();
     }
@@ -375,8 +418,7 @@ export class PlayScreen implements Screen<PlayParams> {
             // A hazard letting itself out is the player playing correctly, not a
             // miss — so it costs no accuracy and breaks no streak.
             if (!capy.isSettled && !capy.type.harmful) {
-                this.misses += 1;
-                this.combo.recordMiss();
+                this.recordMiss();
                 this.updateHud();
             }
 

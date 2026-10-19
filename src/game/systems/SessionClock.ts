@@ -7,14 +7,15 @@
  *
  * `rate` drains faster than real time: 1.5 means a stage declared as 60s runs
  * out in 40s of wall clock. It is a *feel* knob — the stage table keeps owning
- * the authored duration, this only decides how hard the clock presses.
+ * the authored duration, this only decides how hard the clock presses. It can
+ * also be raised mid-run (`hurry`), so mistakes shorten what is left.
  */
 export class SessionClock {
     private elapsed = 0;
 
     constructor(
         readonly durationMs: number,
-        readonly rate = 1,
+        private rate = 1,
     ) {}
 
     /** Milliseconds left. Never negative. */
@@ -29,6 +30,17 @@ export class SessionClock {
     update(dt: number): void {
         if (this.expired) return;
         this.elapsed += dt * this.rate;
+    }
+
+    /**
+     * Press harder by `step`, from here on.
+     *
+     * The rate only ever rises, so a clean run keeps the authored pace while a
+     * run full of mistakes runs its stage out early. See `MISS_CLOCK_STEP` in
+     * `PlayScreen` for what currently drives this.
+     */
+    hurry(step: number): void {
+        this.rate += step;
     }
 }
 

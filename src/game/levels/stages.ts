@@ -16,13 +16,13 @@ export const STAGES: readonly StageDef[] = [
         // who has stopped playing — it is not meant to be loseable.
         durationMs: 60_000,
         layout: 'grid',
-        // Four holes keep the honeycomb feel while leaving one hole per thumb
-        // reachable — the full seven is too much to take in while learning.
+        // Four holes in a 2x2 grid: one per thumb, and few enough to take in
+        // while learning. The full seven-hole honeycomb is too much at once.
         holes: 4,
         spawn: [{ type: 'normal', weight: 1 }],
         spawnIntervalMs: [900, 1300],
         maxConcurrent: 2,
-        starThresholds: [1, 4, 6],
+        starThresholds: [10, 40, 100],
         tutorial: [
             { prompt: 'Tap the capy!', quota: 1, concurrent: 1, intervalMs: 0, hold: true },
             { prompt: 'Nice! Now get the rest', quota: 3, concurrent: 1, intervalMs: 700, hold: true },
@@ -39,7 +39,7 @@ export const STAGES: readonly StageDef[] = [
         spawn: [{ type: 'normal', weight: 1 }],
         spawnIntervalMs: [900, 1300],
         maxConcurrent: 2,
-        starThresholds: [60, 120, 200],
+        starThresholds: [60, 120, 300],
     },
     {
         // First appearance of `tough`: three taps, and it stays up between
@@ -84,6 +84,31 @@ export const STAGES: readonly StageDef[] = [
         // reachable because a bomb penalty shaves the ceiling rather than
         // moving it out of sight.
         starThresholds: [120, 240, 380],
+    },
+    {
+        // First appearance of `golden`: it sweeps the whole field on its way
+        // down, paying a flat bounty per capy whatever it caught — a bomb
+        // included, so clearing a field you were avoiding is the big payout.
+        // It wears a sparkle so it reads before the first tap.
+        id: 'stage-4',
+        title: 'Stage 4',
+        durationMs: 35_000,
+        layout: 'hex',
+        holes: 7,
+        // Stage 3's 3:1:1 scaled up by two, so the mix feels the same and the
+        // golden stays the rare treat — roughly one spawn in eleven.
+        spawn: [
+            { type: 'normal', weight: 6 },
+            { type: 'tough', weight: 2 },
+            { type: 'bomb', weight: 2 },
+            { type: 'golden', weight: 1 },
+        ],
+        spawnIntervalMs: [800, 1200],
+        maxConcurrent: 4,
+        // Stage 3's, lifted ~18% for the free points a clear hands out on top
+        // of its own score. A first guess — the golden is the least predictable
+        // thing in the table, since its value is whatever happens to be up.
+        starThresholds: [140, 280, 440],
     },
 ];
 
