@@ -29,6 +29,12 @@ const TAP_RADIUS_SCALE = 1.1;
 const HUD_ZONE_Y = 170;
 /** How long a wounded capy stays put so it can be finished off, in ms. */
 const WOUND_GRACE_MS = 1500;
+/**
+ * Countdown drain rate — how hard the clock presses. 1 = real time; 1.5 means
+ * a stage authored as 60s runs out in 40s of wall clock. Lives here rather than
+ * in the stage table because it is a global feel knob, not a per-stage value.
+ */
+const CLOCK_RATE = 1.25;
 /** Lifetime of a floating score popup, in ms. */
 const POPUP_MS = 700;
 
@@ -121,7 +127,7 @@ export class PlayScreen implements Screen<PlayParams> {
         this.createHud(ui, responsive);
 
         if (stage.durationMs !== null) {
-            this.clock = new SessionClock(stage.durationMs);
+            this.clock = new SessionClock(stage.durationMs, CLOCK_RATE);
             this.spawner = new Spawner({
                 intervalMs: stage.spawnIntervalMs,
                 maxConcurrent: stage.maxConcurrent,
@@ -265,6 +271,9 @@ export class PlayScreen implements Screen<PlayParams> {
 
         this.misses += 1;
         this.combo.recordMiss();
+        // Answered, not silent: without this the tap looks ignored, because the
+        // only other sign is a combo label the player may not have had.
+        this.addPopup('Miss!', x, y - 46, COLORS.hazard);
         this.updateHud();
     }
 
@@ -466,15 +475,28 @@ export class PlayScreen implements Screen<PlayParams> {
     // --- Juice --------------------------------------------------------------
 
     private spawnPopup(capy: Capy, points: number): void {
+        this.addPopup(
+            `${points >= 0 ? '+' : ''}${points}`,
+            capy.hole.slot.x,
+            capy.hole.slot.y - HOLE_RADIUS - 46,
+            points >= 0 ? COLORS.star : COLORS.hazard,
+        );
+    }
+
+    /**
+     * Float any label above the popup layer, e.g. "Miss!" for a whiff. Sharing
+     * this with score popups keeps rise speed and fade identical for both.
+     */
+    private addPopup(text: string, x: number, y: number, fill: number): void {
         if (!this.popupLayer) return;
 
-        const label = createLabel(`${points >= 0 ? '+' : ''}${points}`, {
+        const label = createLabel(text, {
             fontSize: 36,
-            fill: points >= 0 ? COLORS.star : COLORS.hazard,
+            fill,
             stroke: { color: COLORS.black, width: 3 },
         });
         label.anchor.set(0.5);
-        label.position.set(capy.hole.slot.x, capy.hole.slot.y - HOLE_RADIUS - 46);
+        label.position.set(x, y);
 
         this.popupLayer.addChild(label);
         this.popups.push({ label, life: 0 });
