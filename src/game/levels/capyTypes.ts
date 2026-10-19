@@ -57,9 +57,15 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         id: 'runner',
         points: 20,
         hp: 2,
+        // The one type that *moves*: two short stays and two relocations
+        // between them, so the whack has to follow it across the board. Every
+        // other archetype is a decision about timing; this one is about aim.
         staysWhenHit: true,
-        upMs: 2200,
-        emergeMs: 200,
+        hops: 2,
+        upMs: 650,
+        // Up and down faster than anything else: the hop is the tell, and a
+        // slow rise or dive reads as the capy drifting rather than running.
+        emergeMs: 180,
         color: 0xc8b6ff,
         accent: 0x4a3520,
     },

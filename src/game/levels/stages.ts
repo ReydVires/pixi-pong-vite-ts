@@ -49,7 +49,7 @@ export const STAGES: readonly StageDef[] = [
         title: 'Stage 2',
         durationMs: 35_000,
         layout: 'hex',
-        holes: 7,
+        holes: 5,
         spawn: [
             { type: 'normal', weight: 3 },
             { type: 'tough', weight: 1 },
@@ -70,7 +70,7 @@ export const STAGES: readonly StageDef[] = [
         title: 'Stage 3',
         durationMs: 35_000,
         layout: 'hex',
-        holes: 7,
+        holes: 5,
         spawn: [
             { type: 'normal', weight: 3 },
             { type: 'tough', weight: 1 },
@@ -109,6 +109,30 @@ export const STAGES: readonly StageDef[] = [
         // of its own score. A first guess — the golden is the least predictable
         // thing in the table, since its value is whatever happens to be up.
         starThresholds: [140, 280, 440],
+    },
+    {
+        // First appearance of `runner`: the one capy that doesn't stay put.
+        // Two taps, but on a target that keeps changing holes — so the second
+        // one has to travel, and a tap where it used to be is a whiff.
+        id: 'stage-5',
+        title: 'Stage 5',
+        durationMs: 35_000,
+        layout: 'hex',
+        holes: 7,
+        // Stage 4's mix with the runner folded in, so a moving target is a
+        // recurring threat rather than the whole stage.
+        spawn: [
+            { type: 'normal', weight: 6 },
+            { type: 'tough', weight: 2 },
+            { type: 'bomb', weight: 2 },
+            { type: 'golden', weight: 1 },
+            { type: 'runner', weight: 3 },
+        ],
+        spawnIntervalMs: [800, 1200],
+        maxConcurrent: 5,
+        // Stage 4's, lifted for the runner's 20 — and not lifted further,
+        // because a runner that gets away pays nothing at all.
+        starThresholds: [160, 320, 500],
     },
 ];
 

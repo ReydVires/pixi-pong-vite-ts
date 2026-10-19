@@ -6,8 +6,12 @@
  *
  * The default `hex` layout is a honeycomb: circular holes pack more evenly on
  * a hexagonal lattice than on a square grid, and concentric rings read as a
- * capy den. Hit-testing is unaffected — holes are circles wherever they sit,
- * so `PlayScreen` only ever needs a point-in-circle check.
+ * capy den. Rings are handed out whole, and an incomplete outer ring is filled
+ * symmetrically about the centre line, so a den never looks like a pie with a
+ * bite taken out of it.
+ *
+ * Hit-testing is unaffected — holes are circles wherever they sit, so
+ * `PlayScreen` only ever needs a point-in-circle check.
  */
 
 export interface HoleSlot {
@@ -64,12 +68,70 @@ function angleOf([q, r]: [number, number]): number {
     return Math.atan2(r + q / 2, q);
 }
 
+/** Every point on ring `ring` of the honeycomb, swept in angle order. */
+function axialRing(ring: number): [number, number][] {
+    return axialCoordinates(ring).filter(([q, r]) => hexDistance(q, r) === ring);
+}
+
+/**
+ * Take `n` points off one ring while keeping the ring's symmetry.
+ *
+ * A ring's points pair up under the mirror across the vertical centre line: the
+ * mirror of `(q, r)` is `(-q, r + q)`. Only the points on the line itself are
+ * their own mirror. So the picks come out in whole pairs, and an odd one left
+ * over takes an axis point on whichever side the pairs are *not* leaning —
+ * which recentres the cluster as well as mirroring it.
+ *
+ * Taking the first `n` round the ring instead is what made a four-hole
+ * honeycomb read lopsided: `centre, up-left, up, up-right`, all three outer
+ * holes crowded into the top of the field.
+ */
+function symmetricPick(ring: [number, number][], n: number): [number, number][] {
+    const picked: [number, number][] = [];
+    const axis: [number, number][] = [];
+    const taken = new Set<string>();
+
+    for (const [q, r] of ring) {
+        // A point on the centre line is its own mirror; there are only ever two
+        // per ring, and they are the odd ones out.
+        if (q === 0) {
+            axis.push([q, r]);
+            continue;
+        }
+
+        const mirror: [number, number] = [-q, r + q];
+        if (taken.has(`${mirror[0]},${mirror[1]}`)) continue;
+
+        // Whole pairs only — half a pair is exactly the lopsidedness being
+        // fixed here.
+        if (picked.length + 2 <= n) picked.push([q, r], mirror);
+        taken.add(`${q},${r}`);
+    }
+
+    if (picked.length < n) {
+        // Which way the pairs lean, so the odd one can pull back against it.
+        const lean = picked.reduce((sum, [q, r]) => sum + r + q / 2, 0);
+        const odd = axis.find(([, r]) => Math.sign(r) !== Math.sign(lean)) ?? axis[0];
+        if (odd) picked.push(odd);
+    }
+
+    return picked;
+}
+
 /** Honeycomb centres: 1 hole (ring 0), 7 (ring 1), 19 (ring 2), … */
 function hexSlots(count: number, spacing: number, centerX: number, centerY: number): { x: number; y: number }[] {
     // Adjacent flat-top centres sit `sqrt(3) * size` apart; solve for `size`.
     const size = spacing / Math.sqrt(3);
+    const placed: [number, number][] = [];
 
-    return axialCoordinates(Math.ceil(Math.sqrt(count))).slice(0, count).map(([q, r]) => ({
+    // Whole rings in, then one last ring filled symmetrically. A whole ring is
+    // symmetrical on its own, so it is only ever taken in one piece.
+    for (let ring = 0; placed.length < count; ring++) {
+        const points = axialRing(ring);
+        placed.push(...(placed.length + points.length <= count ? points : symmetricPick(points, count - placed.length)));
+    }
+
+    return placed.map(([q, r]) => ({
         x: centerX + size * 1.5 * q,
         y: centerY + size * Math.sqrt(3) * (r + q / 2),
     }));

@@ -31,13 +31,20 @@ const PIP_MIN_PROGRESS = 0.5;
  */
 export class Capy extends Entity {
     readonly type: CapyType;
-    readonly hole: Hole;
     readonly hitTarget: HitTarget;
     readonly emerge: Emerge;
 
     /** Set by the screen; fired when the capy finishes sinking away. */
     onRetreated: (() => void) | null = null;
 
+    /**
+     * The hole it is standing in — not the one it was built in, because a
+     * `runner` moves house. Its position is always relative to this, so only
+     * `hopTo()` may write it.
+     */
+    private spot: Hole;
+    /** Appearances still owed. Zero for everything but a `runner`. */
+    private movesLeft: number;
     private readonly headRadius: number;
     private readonly flashOverlay: Graphics;
     private readonly pips: Graphics;
@@ -48,9 +55,10 @@ export class Capy extends Entity {
         super();
 
         this.type = type;
-        this.hole = hole;
+        this.spot = hole;
         this.hitTarget = new HitTarget(type);
         this.headRadius = hole.slot.radius * 0.7;
+        this.movesLeft = type.hops ?? 0;
 
         // Matches the blocky head + muzzle, so a hit flash doesn't ring past it.
         const r0 = this.headRadius;
@@ -82,6 +90,30 @@ export class Capy extends Entity {
     /** Start rising out of the hole. */
     start(): void {
         this.emerge.start();
+    }
+
+    /** Where it currently is. Moves when it hops. */
+    get hole(): Hole {
+        return this.spot;
+    }
+
+    /** True while it still has somewhere else to be. */
+    get canHop(): boolean {
+        return this.movesLeft > 0;
+    }
+
+    /**
+     * Pop up in another hole instead of leaving for good.
+     *
+     * A capy's parent *is* its position — the hole's socket is what draws it
+     * behind the hole's own lip — so moving house is a re-mount, and `mount()`
+     * takes it out of the old socket without being asked.
+     */
+    hopTo(hole: Hole): void {
+        this.movesLeft -= 1;
+        this.spot = hole;
+        hole.mount(this);
+        this.setEmergeProgress(0);
     }
 
     /** Whether a tap at `(x, y)` should count — a generous circle over the hole. */

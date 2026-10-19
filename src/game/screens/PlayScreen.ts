@@ -294,7 +294,9 @@ export class PlayScreen implements Screen<PlayParams> {
         capy.refreshHealth();
 
         if (!downed) {
-            // Still ticking: give it a grace window rather than fleeing mid-fight.
+            // Still ticking, so it gets a moment to be finished rather than
+            // slipping away between taps. A wounded `runner` spends that
+            // moment stood still — and hops the instant it is over.
             if (capy.type.staysWhenHit) capy.emerge.retain(WOUND_GRACE_MS);
             return;
         }
@@ -415,6 +417,10 @@ export class PlayScreen implements Screen<PlayParams> {
         if (this.pendingRetirement.length === 0) return;
 
         for (const capy of this.pendingRetirement.splice(0)) {
+            // A hopper that is not done yet came up *somewhere else*; the
+            // retreat the screen just watched was a move, not an escape.
+            if (this.tryHop(capy)) continue;
+
             // A hazard letting itself out is the player playing correctly, not a
             // miss — so it costs no accuracy and breaks no streak.
             if (!capy.isSettled && !capy.type.harmful) {
@@ -429,6 +435,31 @@ export class PlayScreen implements Screen<PlayParams> {
             capy.parent?.removeChild(capy);
             capy.destroy({ children: true });
         }
+    }
+
+    /**
+     * Let a hopper come up in a different hole rather than let it go.
+     *
+     * It was already sinking — that is the only reason it is in hand — so all
+     * this changes is where it arrives, and the player's second tap has to
+     * travel rather than repeat. `false` means it really has gone, and the
+     * caller books the escape it looked like.
+     */
+    private tryHop(capy: Capy): boolean {
+        // Only an *escape* can turn into a move. A settled capy was whacked (or
+        // swept), so it is on its way down for good — if this could hop, a
+        // finished runner would pop back up with no pips left.
+        if (capy.isSettled || !capy.canHop) return false;
+
+        // Nowhere to run to means the move is forfeit and it is simply gone.
+        // Only reachable when the field is packed, since it frees its own hole
+        // on the way out — so it is the calm fallback, not the common case.
+        const free = this.holes.filter((hole) => hole.free);
+        if (free.length === 0) return false;
+
+        capy.hopTo(free[Math.floor(Math.random() * free.length)]);
+        capy.start();
+        return true;
     }
 
     // --- Stage end ----------------------------------------------------------

@@ -25,6 +25,16 @@ export interface CapyType {
     harmful?: boolean;
     /** Resolves every other live capy when whacked. */
     effect?: 'clear';
+    /**
+     * How many times it can slip to another hole rather than leaving.
+     *
+     * Set on a type that will not hold still: each time it would escape, it
+     * resurfaces somewhere else, so a whack has to *travel* rather than just
+     * land in time. Its `upMs` is then the stay in one hole, not its whole
+     * life. Set as the number of extra appearances it gets; the stay after the
+     * last one ends in an ordinary escape.
+     */
+    hops?: number;
     /** Placeholder body colour until real art lands. */
     color: number;
     /** Placeholder detail (eyes/snout) colour. */

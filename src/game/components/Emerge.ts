@@ -26,6 +26,10 @@ export interface EmergeOptions {
  * `hittable` is the only thing callers need to gate taps on, and `retain()`
  * is the escape hatch the screen uses to give a wounded capy time to finish.
  * Time only ever advances from `update(dt)`, so pausing the screen freezes it.
+ *
+ * A capy that ran its course is not necessarily spent: the screen is free to
+ * `start()` it again from `hidden`, which is how a `runner` resurfaces in
+ * another hole without ever leaving the stage.
  */
 export class Emerge implements Component {
     private current: EmergeState = 'hidden';
