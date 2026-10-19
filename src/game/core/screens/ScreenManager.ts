@@ -5,7 +5,7 @@ import { KeyboardInput } from '../input/KeyboardInput';
 import { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 import type { Unsubscribe } from '../responsive/layout';
-import type { Screen, ScreenContext, ScreenFactory } from './Screen';
+import type { Screen, ScreenContext, ScreenFactory } from './screen';
 
 /**
  * Owns the lifecycle of screens: registration, transitions, teardown

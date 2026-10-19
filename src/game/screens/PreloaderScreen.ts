@@ -1,7 +1,7 @@
 import { ASSETS, COLORS, FONTS, SCREENS, SCREEN_CENTER } from '../config';
-import { createColorBackground, createTextureBackground } from '../core/display/Background';
+import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { ProgressBar } from '../core/display/ProgressBar';
-import type { Screen, ScreenContext } from '../core/screens/Screen';
+import type { Screen, ScreenContext } from '../core/screens/screen';
 
 /**
  * Merges the old Boot + Preloader scenes: draws a backdrop, loads the

@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js';
 import type { DestroyOptions } from 'pixi.js';
-import type { Component } from './Component';
+import type { Component } from './component';
 
 /**
  * A display object that composes zero or more `Component` behaviors.

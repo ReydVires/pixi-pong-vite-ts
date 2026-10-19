@@ -2,14 +2,14 @@ import type { Text } from 'pixi.js';
 import { Pulse } from '../components/Pulse';
 import { Spin } from '../components/Spin';
 import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
-import { createColorBackground, createTextureBackground } from '../core/display/Background';
-import { createButton } from '../core/display/Button';
-import { createImage } from '../core/display/Image';
-import { createLabel } from '../core/display/Label';
+import { createColorBackground, createTextureBackground } from '../core/display/background';
+import { createButton } from '../core/display/button';
+import { createImage } from '../core/display/image';
+import { createLabel } from '../core/display/label';
 import { Entity } from '../core/entities/Entity';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import type { ViewportMetrics } from '../core/responsive/Responsive';
-import type { Screen, ScreenContext } from '../core/screens/Screen';
+import type { Screen, ScreenContext } from '../core/screens/screen';
 import { FIRST_STAGE_ID } from '../levels/stages';
 
 export class MainMenuScreen implements Screen {

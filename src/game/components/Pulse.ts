@@ -1,4 +1,4 @@
-import type { Component } from '../core/entities/Component';
+import type { Component } from '../core/entities/component';
 
 export interface PulseOptions {
     /**

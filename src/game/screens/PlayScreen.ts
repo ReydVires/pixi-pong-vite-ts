@@ -1,13 +1,13 @@
 import { Container } from 'pixi.js';
 import type { Text } from 'pixi.js';
 import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
-import { createColorBackground, createTextureBackground } from '../core/display/Background';
-import { createButton } from '../core/display/Button';
-import { createLabel } from '../core/display/Label';
+import { createColorBackground, createTextureBackground } from '../core/display/background';
+import { createButton } from '../core/display/button';
+import { createLabel } from '../core/display/label';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import { holeSlots } from '../core/layout/hexLayout';
 import type { Responsive } from '../core/responsive/Responsive';
-import type { Screen, ScreenContext } from '../core/screens/Screen';
+import type { Screen, ScreenContext } from '../core/screens/screen';
 import { Hole } from '../entities/Hole';
 import { Capy } from '../entities/Capy';
 import { CAPY_TYPES } from '../levels/capyTypes';

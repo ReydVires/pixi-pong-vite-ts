@@ -1,6 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { COLORS } from '../../config';
-import { createLabel } from './Label';
+import { createLabel } from './label';
 
 export interface ButtonOptions {
     /** Total width in design px. @default 300 */

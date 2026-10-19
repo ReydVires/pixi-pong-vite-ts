@@ -1,9 +1,9 @@
 import { Container, Graphics } from 'pixi.js';
 import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
-import { createColorBackground, createTextureBackground } from '../core/display/Background';
-import { createButton } from '../core/display/Button';
-import { createLabel } from '../core/display/Label';
-import type { Screen, ScreenContext } from '../core/screens/Screen';
+import { createColorBackground, createTextureBackground } from '../core/display/background';
+import { createButton } from '../core/display/button';
+import { createLabel } from '../core/display/label';
+import type { Screen, ScreenContext } from '../core/screens/screen';
 import { findNextStage, findStage } from '../levels/stages';
 
 /** Data carried across Play → Results. */
