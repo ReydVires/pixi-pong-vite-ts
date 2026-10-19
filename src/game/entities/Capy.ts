@@ -3,14 +3,14 @@ import { Emerge } from '../components/Emerge';
 import { HitTarget } from '../components/HitTarget';
 import { COLORS } from '../config';
 import { Entity } from '../core/entities/Entity';
-import type { MouseType } from '../levels/types';
+import type { CapyType } from '../levels/types';
 import type { Hole } from './Hole';
 
 /** How long a hit flash stays visible, in ms. */
 const FLASH_MS = 140;
 
 /**
- * A mouse rising out of its hole.
+ * A capy rising out of its hole.
  *
  * Position is relative to its `Hole`: `Emerge` drives it through
  * `setEmergeProgress()` (0 = sunk, 1 = risen), and `HitTarget` counts the taps
@@ -20,13 +20,13 @@ const FLASH_MS = 140;
  * The body is drawn from circles as a placeholder for real art; swapping in a
  * sprite later only touches `createBody()`.
  */
-export class Mouse extends Entity {
-    readonly type: MouseType;
+export class Capy extends Entity {
+    readonly type: CapyType;
     readonly hole: Hole;
     readonly hitTarget: HitTarget;
     readonly emerge: Emerge;
 
-    /** Set by the screen; fired when the mouse finishes sinking away. */
+    /** Set by the screen; fired when the capy finishes sinking away. */
     onRetreated: (() => void) | null = null;
 
     private readonly headRadius: number;
@@ -35,7 +35,7 @@ export class Mouse extends Entity {
     private flashLeft = 0;
     private settled = false;
 
-    constructor(type: MouseType, hole: Hole, hold = false) {
+    constructor(type: CapyType, hole: Hole, hold = false) {
         super();
 
         this.type = type;
@@ -55,7 +55,7 @@ export class Mouse extends Entity {
 
         this.addChild(this.createBody(), this.flashOverlay, this.pips);
 
-        // Must be attached, or `update()` never ticks it and the mouse is
+        // Must be attached, or `update()` never ticks it and the capy is
         // frozen at progress 0 — sunk, and unable to ever retreat.
         this.emerge = this.addComponent(
             new Emerge(this, {
@@ -93,7 +93,7 @@ export class Mouse extends Entity {
         this.drawPips();
     }
 
-    /** True once the screen has scored or swept this mouse — never an escape. */
+    /** True once the screen has scored or swept this capy — never an escape. */
     markSettled(): void {
         this.settled = true;
     }
@@ -102,7 +102,7 @@ export class Mouse extends Entity {
         return this.settled;
     }
 
-    /** Called by `Emerge` — moves and scales the mouse as it rises or sinks. */
+    /** Called by `Emerge` — moves and scales the capy as it rises or sinks. */
     setEmergeProgress(progress: number): void {
         const radius = this.hole.slot.radius;
         // Tuned against the hole for the blocky capybara silhouette: at 0 the
@@ -159,7 +159,7 @@ export class Mouse extends Entity {
         return body;
     }
 
-    /** Health pips above the head — only drawn for multi-hit mice. */
+    /** Health pips above the head — only drawn for multi-hit capys. */
     private drawPips(): void {
         this.pips.clear();
         if (this.type.hp <= 1) return;

@@ -9,10 +9,10 @@ import { holeSlots } from '../core/layout/hexLayout';
 import type { Responsive } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/Screen';
 import { Hole } from '../entities/Hole';
-import { Mouse } from '../entities/Mouse';
-import { MOUSE_TYPES } from '../levels/mouseTypes';
+import { Capy } from '../entities/Capy';
+import { CAPY_TYPES } from '../levels/capyTypes';
 import { findStage } from '../levels/stages';
-import type { MouseTypeId, StageDef, TutorialStep } from '../levels/types';
+import type { CapyTypeId, StageDef, TutorialStep } from '../levels/types';
 import { ComboTracker } from '../systems/ComboTracker';
 import { ScoreKeeper, starsFor } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
@@ -27,7 +27,7 @@ const HOLE_RADIUS = 74;
 const TAP_RADIUS_SCALE = 1.1;
 /** Above this line is HUD chrome (score/timer/pause), never playfield. */
 const HUD_ZONE_Y = 170;
-/** How long a wounded mouse stays put so it can be finished off, in ms. */
+/** How long a wounded capy stays put so it can be finished off, in ms. */
 const WOUND_GRACE_MS = 1500;
 /** Lifetime of a floating score popup, in ms. */
 const POPUP_MS = 700;
@@ -45,22 +45,22 @@ interface Popup {
  * Runs one stage.
  *
  * The stage itself is data (`StageDef`); this screen owns the things data
- * can't express — which hole a mouse goes in, what a tap means, and when the
+ * can't express — which hole a capy goes in, what a tap means, and when the
  * stage is over. Scripted stages are driven by `tutorial`; random ones by
  * `Spawner` and a `SessionClock`.
  *
  * Hit testing is deliberately centralised: one `pointerdown` listener tests
- * every hittable mouse, and a tap that hits none is a miss. That keeps
- * accuracy accounting honest, which a listener-per-mouse would muddy.
+ * every hittable capy, and a tap that hits none is a miss. That keeps
+ * accuracy accounting honest, which a listener-per-capy would muddy.
  */
 export class PlayScreen implements Screen<PlayParams> {
     private context: ScreenContext | null = null;
     private stage: StageDef | null = null;
 
     private readonly holes: Hole[] = [];
-    private readonly mice: Mouse[] = [];
+    private readonly capys: Capy[] = [];
     private readonly popups: Popup[] = [];
-    private readonly pendingRetirement: Mouse[] = [];
+    private readonly pendingRetirement: Capy[] = [];
 
     private clock: SessionClock | null = null;
     private spawner: Spawner | null = null;
@@ -160,7 +160,7 @@ export class PlayScreen implements Screen<PlayParams> {
         // A transition may have started above — don't touch torn-down state.
         if (this.finished) return;
 
-        for (const mouse of this.mice) mouse.update(dt);
+        for (const capy of this.capys) capy.update(dt);
         this.flushRetired();
         this.updatePopups(dt);
     }
@@ -174,7 +174,7 @@ export class PlayScreen implements Screen<PlayParams> {
         for (const popup of this.popups) popup.label.destroy();
         this.popups.length = 0;
         this.pendingRetirement.length = 0;
-        this.mice.length = 0;
+        this.capys.length = 0;
         this.holes.length = 0;
 
         this.context = null;
@@ -195,7 +195,7 @@ export class PlayScreen implements Screen<PlayParams> {
         const spawner = this.spawner;
         if (!spawner) return;
 
-        if (spawner.update(dt, this.mice.length)) {
+        if (spawner.update(dt, this.capys.length)) {
             const hole = this.pickFreeHole();
             if (hole) this.spawn(pickSpawn(stage.spawn), hole, false);
         }
@@ -219,8 +219,8 @@ export class PlayScreen implements Screen<PlayParams> {
         const stepComplete = quotaMet || timeMet;
 
         // Stop spawning once the step is satisfied, then wait for the field to
-        // clear so the next prompt never arrives on top of a live mouse.
-        if (!stepComplete && this.stepCooldown <= 0 && this.mice.length < step.concurrent) {
+        // clear so the next prompt never arrives on top of a live capy.
+        if (!stepComplete && this.stepCooldown <= 0 && this.capys.length < step.concurrent) {
             const hole = this.pickFreeHole();
             if (hole) {
                 this.spawn('normal', hole, step.hold ?? false);
@@ -228,7 +228,7 @@ export class PlayScreen implements Screen<PlayParams> {
             }
         }
 
-        if (stepComplete && this.mice.length === 0) this.advanceStep();
+        if (stepComplete && this.capys.length === 0) this.advanceStep();
     }
 
     private advanceStep(): void {
@@ -253,7 +253,7 @@ export class PlayScreen implements Screen<PlayParams> {
     private handleTap(x: number, y: number): void {
         if (this.paused || this.finished) return;
 
-        const target = this.mice.find((mouse) => mouse.emerge.hittable && mouse.near(x, y, TAP_RADIUS_SCALE));
+        const target = this.capys.find((capy) => capy.emerge.hittable && capy.near(x, y, TAP_RADIUS_SCALE));
         if (target) {
             this.whack(target);
             return;
@@ -268,49 +268,49 @@ export class PlayScreen implements Screen<PlayParams> {
         this.updateHud();
     }
 
-    private whack(mouse: Mouse): void {
-        const downed = mouse.hitTarget.hit();
-        mouse.flash();
+    private whack(capy: Capy): void {
+        const downed = capy.hitTarget.hit();
+        capy.flash();
 
         if (!downed) {
             // Still ticking: give it a grace window rather than fleeing mid-fight.
-            if (mouse.type.staysWhenHit) mouse.emerge.retain(WOUND_GRACE_MS);
-            mouse.refreshHealth();
+            if (capy.type.staysWhenHit) capy.emerge.retain(WOUND_GRACE_MS);
+            capy.refreshHealth();
             return;
         }
 
-        mouse.markSettled();
-        this.award(mouse);
+        capy.markSettled();
+        this.award(capy);
 
-        if (mouse.type.effect === 'clear') this.clearField(mouse);
+        if (capy.type.effect === 'clear') this.clearField(capy);
 
-        mouse.emerge.retreat();
+        capy.emerge.retreat();
     }
 
     /** A clear effect resolves everything else on the field. */
-    private clearField(resolved: Mouse): void {
-        for (const mouse of [...this.mice]) {
-            if (mouse === resolved) continue;
+    private clearField(resolved: Capy): void {
+        for (const capy of [...this.capys]) {
+            if (capy === resolved) continue;
 
-            mouse.markSettled();
-            if (!mouse.type.harmful) {
-                mouse.hitTarget.forceDown();
-                mouse.refreshHealth();
-                this.award(mouse);
+            capy.markSettled();
+            if (!capy.type.harmful) {
+                capy.hitTarget.forceDown();
+                capy.refreshHealth();
+                this.award(capy);
             }
-            mouse.emerge.retreat();
+            capy.emerge.retreat();
         }
     }
 
-    private award(mouse: Mouse): void {
-        const points = mouse.type.points * this.combo.multiplier;
+    private award(capy: Capy): void {
+        const points = capy.type.points * this.combo.multiplier;
 
         this.score.add(points);
         this.combo.recordHit();
         this.hits += 1;
         this.stepWhacks += 1;
 
-        this.spawnPopup(mouse, points);
+        this.spawnPopup(capy, points);
         this.updateHud();
     }
 
@@ -322,38 +322,43 @@ export class PlayScreen implements Screen<PlayParams> {
         return free[Math.floor(Math.random() * free.length)];
     }
 
-    private spawn(typeId: MouseTypeId, hole: Hole, hold: boolean): void {
-        const mouse = new Mouse(MOUSE_TYPES[typeId], hole, hold);
+    private spawn(typeId: CapyTypeId, hole: Hole, hold: boolean): void {
+        const capy = new Capy(CAPY_TYPES[typeId], hole, hold);
 
-        mouse.onRetreated = () => this.pendingRetirement.push(mouse);
-        hole.mount(mouse);
-        this.mice.push(mouse);
+        capy.onRetreated = () => this.pendingRetirement.push(capy);
+        hole.mount(capy);
+        this.capys.push(capy);
         this.spawned += 1;
-        mouse.start();
+        capy.start();
     }
 
     /** Free holes that finished sinking away, and score any that escaped. */
     private flushRetired(): void {
         if (this.pendingRetirement.length === 0) return;
 
-        for (const mouse of this.pendingRetirement.splice(0)) {
-            if (!mouse.isSettled) {
+        for (const capy of this.pendingRetirement.splice(0)) {
+            if (!capy.isSettled) {
                 this.misses += 1;
                 this.combo.recordMiss();
                 this.updateHud();
             }
 
-            const index = this.mice.indexOf(mouse);
-            if (index !== -1) this.mice.splice(index, 1);
+            const index = this.capys.indexOf(capy);
+            if (index !== -1) this.capys.splice(index, 1);
 
-            mouse.onRetreated = null;
-            mouse.parent?.removeChild(mouse);
-            mouse.destroy({ children: true });
+            capy.onRetreated = null;
+            capy.parent?.removeChild(capy);
+            capy.destroy({ children: true });
         }
     }
 
     // --- Stage end ----------------------------------------------------------
 
+    /**
+     * End the stage. Every path — beating it *or* running out of clock — goes
+     * through Results, so the player always sees score, stars and accuracy.
+     * Stage 1 starts from there, when the player taps Next.
+     */
     private finish(): void {
         const stage = this.stage;
         if (!stage || this.finished) return;
@@ -460,7 +465,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
     // --- Juice --------------------------------------------------------------
 
-    private spawnPopup(mouse: Mouse, points: number): void {
+    private spawnPopup(capy: Capy, points: number): void {
         if (!this.popupLayer) return;
 
         const label = createLabel(`${points >= 0 ? '+' : ''}${points}`, {
@@ -469,7 +474,7 @@ export class PlayScreen implements Screen<PlayParams> {
             stroke: { color: COLORS.black, width: 3 },
         });
         label.anchor.set(0.5);
-        label.position.set(mouse.hole.slot.x, mouse.hole.slot.y - HOLE_RADIUS - 46);
+        label.position.set(capy.hole.slot.x, capy.hole.slot.y - HOLE_RADIUS - 46);
 
         this.popupLayer.addChild(label);
         this.popups.push({ label, life: 0 });

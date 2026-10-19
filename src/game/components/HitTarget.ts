@@ -1,7 +1,7 @@
-import type { MouseType } from '../levels/types';
+import type { CapyType } from '../levels/types';
 
 /**
- * How many taps a mouse takes before it goes down.
+ * How many taps a capy takes before it goes down.
  *
  * This is data plus one rule, not per-frame behavior — the screen reads it
  * after each tap. `hp > 1` is what makes `tough` and `runner` linger instead
@@ -10,7 +10,7 @@ import type { MouseType } from '../levels/types';
 export class HitTarget {
     private hp: number;
 
-    constructor(readonly type: MouseType) {
+    constructor(readonly type: CapyType) {
         this.hp = type.hp;
     }
 
@@ -29,7 +29,7 @@ export class HitTarget {
         return this.downed;
     }
 
-    /** Resolve the mouse without a tap — used when a clear effect sweeps it up. */
+    /** Resolve the capy without a tap — used when a clear effect sweeps it up. */
     forceDown(): void {
         this.hp = 0;
     }

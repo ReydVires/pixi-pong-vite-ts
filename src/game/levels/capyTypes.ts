@@ -1,16 +1,16 @@
-import type { MouseType, MouseTypeId } from './types';
+import type { CapyType, CapyTypeId } from './types';
 
 /**
  * The five archetypes.
  *
  * `tough` and `runner` keep `staysWhenHit`, which is what makes "not every
- * mouse goes straight back down after one whack" a rule rather than a special
+ * capy goes straight back down after one whack" a rule rather than a special
  * case — `hp` decides how many whacks, the type decides whether it lingers.
  *
  * Colours are placeholders for real art; nothing reads them but the shapes
- * drawn in `entities/Mouse.ts`.
+ * drawn in `entities/Capy.ts`.
  */
-export const MOUSE_TYPES: Record<MouseTypeId, MouseType> = {
+export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
     normal: {
         id: 'normal',
         points: 10,

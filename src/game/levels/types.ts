@@ -1,16 +1,16 @@
 /**
- * Data model for stages and mice.
+ * Data model for stages and capys.
  *
  * Everything a stage can express lives here as plain data, so adding a stage —
  * or tuning one — never touches gameplay code. See `stages.ts` for the tables
- * and `mouseTypes.ts` for the archetypes.
+ * and `capyTypes.ts` for the archetypes.
  */
 
-export type MouseTypeId = 'normal' | 'tough' | 'bomb' | 'golden' | 'runner';
+export type CapyTypeId = 'normal' | 'tough' | 'bomb' | 'golden' | 'runner';
 
-/** How one mouse archetype behaves and scores. */
-export interface MouseType {
-    id: MouseTypeId;
+/** How one capy archetype behaves and scores. */
+export interface CapyType {
+    id: CapyTypeId;
     /** Points awarded when it goes down (negative for hazards). */
     points: number;
     /** Taps required before it goes down. */
@@ -23,7 +23,7 @@ export interface MouseType {
     emergeMs: number;
     /** Tapping it is penalised rather than rewarded. */
     harmful?: boolean;
-    /** Resolves every other live mouse when whacked. */
+    /** Resolves every other live capy when whacked. */
     effect?: 'clear';
     /** Placeholder body colour until real art lands. */
     color: number;
@@ -33,7 +33,7 @@ export interface MouseType {
 
 /** A stage's spawn table: weighted picks from the archetypes it allows. */
 export interface SpawnEntry {
-    type: MouseTypeId;
+    type: CapyTypeId;
     weight: number;
 }
 
@@ -45,11 +45,11 @@ export interface TutorialStep {
     quota?: number;
     /** How long the step runs, in ms. Omit when the step is quota-driven. */
     durationMs?: number;
-    /** Mice allowed on screen at once. */
+    /** Capys allowed on screen at once. */
     concurrent: number;
     /** Delay between spawns, in ms. */
     intervalMs: number;
-    /** Mice never escape — the player must whack them to advance. */
+    /** Capys never escape — the player must whack them to advance. */
     hold?: boolean;
 }
 

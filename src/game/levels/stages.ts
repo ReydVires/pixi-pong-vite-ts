@@ -14,15 +14,17 @@ export const STAGES: readonly StageDef[] = [
         title: 'Tutorial',
         // Generous: the beats need ~6 whacks, so this only catches a player
         // who has stopped playing — it is not meant to be loseable.
-        durationMs: 120_000,
+        durationMs: 60_000,
         layout: 'hex',
-        holes: 7,
+        // Four holes keep the honeycomb feel while leaving one hole per thumb
+        // reachable — the full seven is too much to take in while learning.
+        holes: 4,
         spawn: [{ type: 'normal', weight: 1 }],
         spawnIntervalMs: [900, 1300],
         maxConcurrent: 2,
         starThresholds: [1, 4, 6],
         tutorial: [
-            { prompt: 'Tap the mouse!', quota: 1, concurrent: 1, intervalMs: 0, hold: true },
+            { prompt: 'Tap the capy!', quota: 1, concurrent: 1, intervalMs: 0, hold: true },
             { prompt: 'Nice! Now get the rest', quota: 3, concurrent: 1, intervalMs: 700, hold: true },
             { prompt: "They escape if you're slow", quota: 2, concurrent: 2, intervalMs: 900 },
             { prompt: "That's it — go!", durationMs: 10_000, concurrent: 2, intervalMs: 700 },

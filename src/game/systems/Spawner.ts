@@ -1,9 +1,9 @@
-import type { MouseTypeId, SpawnEntry } from '../levels/types';
+import type { CapyTypeId, SpawnEntry } from '../levels/types';
 
 export interface SpawnerOptions {
     /** Delay range between spawns, in ms: `[min, max]`. */
     intervalMs: readonly [number, number];
-    /** Hard cap on simultaneous mice. */
+    /** Hard cap on simultaneous capys. */
     maxConcurrent: number;
     /** Poll delay while the field is full, in ms. @default 80 */
     busyPollMs?: number;
@@ -13,7 +13,7 @@ export interface SpawnerOptions {
  * Decides *when* to spawn for random (non-scripted) stages.
  *
  * It never picks *where* — the screen owns the holes, because only the screen
- * knows which are occupied. Returning `true` means "a mouse may appear now if
+ * knows which are occupied. Returning `true` means "a capy may appear now if
  * a free hole exists"; a full field just re-polls shortly after.
  */
 export class Spawner {
@@ -41,7 +41,7 @@ export class Spawner {
 }
 
 /** Weighted pick from a stage's spawn table. */
-export function pickSpawn(entries: readonly SpawnEntry[]): MouseTypeId {
+export function pickSpawn(entries: readonly SpawnEntry[]): CapyTypeId {
     const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
     let roll = Math.random() * total;
 

@@ -6,7 +6,7 @@
  *
  * The default `hex` layout is a honeycomb: circular holes pack more evenly on
  * a hexagonal lattice than on a square grid, and concentric rings read as a
- * mouse den. Hit-testing is unaffected — holes are circles wherever they sit,
+ * capy den. Hit-testing is unaffected — holes are circles wherever they sit,
  * so `PlayScreen` only ever needs a point-in-circle check.
  */
 

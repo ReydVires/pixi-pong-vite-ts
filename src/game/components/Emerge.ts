@@ -15,16 +15,16 @@ export interface EmergeOptions {
     upMs: number;
     /** Never auto-retreat — the player must whack it to send it down. */
     hold?: boolean;
-    /** Fired once, when the mouse finishes sinking out of sight. */
+    /** Fired once, when the capy finishes sinking out of sight. */
     onRetreated?: () => void;
 }
 
 /**
- * The life cycle of one mouse: `hidden → emerging → active → retreating`,
+ * The life cycle of one capy: `hidden → emerging → active → retreating`,
  * then back to `hidden` via `onRetreated`.
  *
  * `hittable` is the only thing callers need to gate taps on, and `retain()`
- * is the escape hatch the screen uses to give a wounded mouse time to finish.
+ * is the escape hatch the screen uses to give a wounded capy time to finish.
  * Time only ever advances from `update(dt)`, so pausing the screen freezes it.
  */
 export class Emerge implements Component {
@@ -41,12 +41,12 @@ export class Emerge implements Component {
         return this.current;
     }
 
-    /** True while a tap on this mouse should count. */
+    /** True while a tap on this capy should count. */
     get hittable(): boolean {
         return this.current === 'emerging' || this.current === 'active';
     }
 
-    /** Rise out of the hole. No-op unless the mouse is still `hidden`. */
+    /** Rise out of the hole. No-op unless the capy is still `hidden`. */
     start(): void {
         if (this.current !== 'hidden') return;
         this.current = 'emerging';

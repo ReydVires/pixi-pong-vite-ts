@@ -46,7 +46,7 @@ export class MainMenuScreen implements Screen {
 
         // Show a tiny blurb so first-time players know the tutorial is ahead
         const tut = createLabel(
-            'Starts with a quick tutorial — tap the first mouse, then they escape',
+            'Starts with a quick tutorial — tap the first capy, then they escape',
             { fontSize: 16, fill: COLORS.white },
         );
         tut.anchor.set(0.5);
