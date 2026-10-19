@@ -39,6 +39,8 @@ export const COLORS = {
     star: 0xffd166,
     /** Hazards and penalties. */
     hazard: 0xff5a5f,
+    /** Night sky the finale's fireworks play against. */
+    sky: 0x0a0f24,
 } as const;
 
 /** Unique keys used with `ScreenManager.register` and `ScreenManager.start`. */
@@ -47,6 +49,7 @@ export const SCREENS = {
     MainMenu: 'MainMenu',
     Play: 'Play',
     Results: 'Results',
+    Celebration: 'Celebration',
 } as const;
 
 /** Bundled text face. The preloader loads it before any label is created. */
@@ -68,4 +71,19 @@ export const FONTS = {
         src: 'assets/fonts/titan-one.woff2',
         family: FONT_FAMILY,
     },
+} as const;
+
+/**
+ * The personal half of the finale — edit the words, not the code.
+ *
+ * `gift` is optional in practice: drop a picture at `public/assets/gift.png`
+ * and it is used as-is. Until then the celebration draws its own present box,
+ * so a missing file can never break the ending.
+ */
+export const CELEBRATION = {
+    /** Small line above the title. */
+    name: 'For you',
+    title: 'Happy Birthday!',
+    message: 'You cleared every stage. Time for your real present.',
+    gift: 'assets/gift.png',
 } as const;

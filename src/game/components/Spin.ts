@@ -9,7 +9,7 @@ export interface SpinOptions {
 }
 
 /**
- * Rotates its target every frame — a minimal example of a composable behavior.
+ * Rotates its target every frame — the menu logo's spin.
  *
  * ```ts
  * const logo = new Entity();

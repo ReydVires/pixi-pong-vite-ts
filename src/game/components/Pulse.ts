@@ -16,8 +16,10 @@ export interface PulseOptions {
 }
 
 /**
- * Gently scales its target up and down in a sine wave — a second example of a
- * composable behavior that stacks with others (e.g. `Spin`) on the same entity.
+ * Gently scales its target up and down in a sine wave.
+ *
+ * A composable behavior like any other: it stacks with e.g. `Spin` on the same
+ * entity, each driving a different property.
  *
  * ```ts
  * const logo = new Entity();

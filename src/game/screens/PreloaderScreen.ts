@@ -4,9 +4,10 @@ import { ProgressBar } from '../core/display/ProgressBar';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 
 /**
- * Merges the old Boot + Preloader scenes: draws a backdrop, loads the
- * first texture, then loads the remaining assets behind an animated
- * progress bar before handing over to the main menu.
+ * Loads the game's assets behind a progress bar, then hands over to the menu.
+ *
+ * The display font and a backdrop come first, so the bar itself has the game's
+ * look while the rest downloads.
  */
 export class PreloaderScreen implements Screen {
     private bar: ProgressBar | null = null;

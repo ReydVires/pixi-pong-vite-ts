@@ -1,5 +1,7 @@
 import { Container } from 'pixi.js';
-import type { Text } from 'pixi.js';
+import type { Graphics, Text } from 'pixi.js';
+import { Burst } from '../components/Burst';
+import { Shockwave } from '../components/Shockwave';
 import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { createButton } from '../core/display/button';
@@ -17,6 +19,7 @@ import { ComboTracker } from '../systems/ComboTracker';
 import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
 import type { TapOutcome } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
+import type { BurstOptions } from '../systems/particles';
 import { SessionClock, secondsRemaining } from '../systems/SessionClock';
 import type { ResultsParams } from './ResultsScreen';
 
@@ -46,6 +49,26 @@ const CLOCK_RATE = 1.25;
 const MISS_CLOCK_STEP = 0.025;
 /** Lifetime of a floating score popup, in ms. */
 const POPUP_MS = 700;
+/** Y of the HUD's top row — score, countdown and the pause button share it. */
+const HUD_ROW_Y = 92;
+/** The combo line hangs directly under the countdown, not off to one side. */
+const COMBO_Y = 150;
+/** How long the combo label stays punched after the multiplier steps up, in ms. */
+const COMBO_PUNCH_MS = 260;
+/** Extra scale at the start of that punch. */
+const COMBO_PUNCH_SCALE = 0.4;
+/** What a whack throws: fast and short, gone before the next capy arrives. */
+const HIT_BURST = { count: 9, speed: [220, 640], lifeMs: [220, 420], size: [3, 7] } as const;
+/** The lighter puff behind a wound, a hazard hit or an escape. */
+const SOFT_BURST = { count: 6, speed: [140, 380], lifeMs: [200, 380], size: [2, 5] } as const;
+/** What the golden's sweep throws — the largest handful in the game. */
+const SWEEP_BURST = { count: 22, speed: [260, 900], lifeMs: [320, 640], size: [4, 9] } as const;
+/** How long the gold wash of a sweep takes to fade, in ms. */
+const SWEEP_FLASH_MS = 240;
+/** How strong that wash gets: a tint over the field, not a whiteout. */
+const SWEEP_FLASH_PEAK = 0.25;
+/** How far a sweep's ring reaches — past the last hole on the widest layout. */
+const SWEEP_RING_MS = 380;
 
 export interface PlayParams {
     stageId: string;
@@ -75,6 +98,8 @@ export class PlayScreen implements Screen<PlayParams> {
     private readonly holes: Hole[] = [];
     private readonly capys: Capy[] = [];
     private readonly popups: Popup[] = [];
+    private readonly bursts: Burst[] = [];
+    private readonly shockwaves: Shockwave[] = [];
     private readonly pendingRetirement: Capy[] = [];
 
     private clock: SessionClock | null = null;
@@ -96,6 +121,12 @@ export class PlayScreen implements Screen<PlayParams> {
     private paused = false;
 
     private popupLayer: Container | null = null;
+    private fxLayer: Container | null = null;
+    private sweepFlash: Graphics | null = null;
+    /** Milliseconds left on the golden's full-screen wash. */
+    private sweepFlashLeft = 0;
+    /** Milliseconds left on the combo label's punch. */
+    private comboPunch = 0;
     private scoreLabel: Text | null = null;
     private comboLabel: Text | null = null;
     private timerLabel: Text | null = null;
@@ -126,6 +157,12 @@ export class PlayScreen implements Screen<PlayParams> {
             this.holes.push(hole);
             world.addChild(hole);
         }
+
+        // Effects sit above the holes — a whack's sparks should cover the mound
+        // they came out of — but below the popups, so a floating score is never
+        // buried under its own explosion.
+        this.fxLayer = new Container();
+        world.addChild(this.fxLayer);
 
         // Added last on purpose: score popups float above the mound they rise
         // from. Adding this layer before the holes tucks every "+10" behind
@@ -178,6 +215,7 @@ export class PlayScreen implements Screen<PlayParams> {
         for (const capy of this.capys) capy.update(dt);
         this.flushRetired();
         this.updatePopups(dt);
+        this.updateEffects(dt);
     }
 
     destroy(): void {
@@ -188,6 +226,8 @@ export class PlayScreen implements Screen<PlayParams> {
 
         for (const popup of this.popups) popup.label.destroy();
         this.popups.length = 0;
+        this.bursts.length = 0;
+        this.shockwaves.length = 0;
         this.pendingRetirement.length = 0;
         this.capys.length = 0;
         this.holes.length = 0;
@@ -197,6 +237,10 @@ export class PlayScreen implements Screen<PlayParams> {
         this.clock = null;
         this.spawner = null;
         this.popupLayer = null;
+        this.fxLayer = null;
+        this.sweepFlash = null;
+        this.sweepFlashLeft = 0;
+        this.comboPunch = 0;
         this.scoreLabel = null;
         this.comboLabel = null;
         this.timerLabel = null;
@@ -281,8 +325,10 @@ export class PlayScreen implements Screen<PlayParams> {
 
         this.recordMiss();
         // Answered, not silent: without this the tap looks ignored, because the
-        // only other sign is a combo label the player may not have had.
-        this.addPopup('Miss!', x, y - 46, COLORS.hazard);
+        // only other sign is a combo label the player may not have had. The
+        // tutorial is the exception — it introduces the verb, not the scolding,
+        // so the red "Miss!" arrives with Stage 1. The tally still moves.
+        if (!this.stage?.tutorial) this.addPopup('Miss!', x, y - 46, COLORS.hazard);
         this.updateHud();
     }
 
@@ -292,6 +338,10 @@ export class PlayScreen implements Screen<PlayParams> {
         // Always redraw, not just on a wound: the finishing blow has to clear
         // the last pip too, or a downed `tough` sinks away still showing one.
         capy.refreshHealth();
+
+        // Every tap gets sparks; the finishing blow throws the bigger handful,
+        // so a wound still reads as an event rather than a no-op.
+        this.spray(capy, downed ? HIT_BURST : SOFT_BURST);
 
         if (!downed) {
             // Still ticking, so it gets a moment to be finished rather than
@@ -321,6 +371,7 @@ export class PlayScreen implements Screen<PlayParams> {
     private strikeHazard(capy: Capy): void {
         capy.flash();
         capy.markSettled();
+        this.spray(capy, SOFT_BURST, COLORS.hazard);
         this.apply(capy, tapOutcome(capy.type, this.combo.multiplier));
         capy.emerge.retreat();
     }
@@ -331,13 +382,22 @@ export class PlayScreen implements Screen<PlayParams> {
      * Every capy still up pays the same flat, type-blind bounty — the `golden`
      * does not care what it caught, so a bomb is a payout rather than a hazard.
      * Nothing was tapped, so the sweep leaves the combo and the accuracy tally
-     * alone; it is points and a popup, nothing else.
+     * alone; it is points and spectacle, nothing else.
      *
      * Only capys a tap could still have reached (`hittable`): one that has
      * already started sinking escaped on its own, and sweeping it would hand
      * back points *and* cancel the miss it has coming in `flushRetired`.
      */
     private clearField(resolved: Capy): void {
+        // The payoff, all in one place: a ring out from the golden, a wash of
+        // gold over the whole screen, sparks on everything it caught, and a
+        // label loud enough to explain the sudden pile of points.
+        const { x, y } = resolved.hole.slot;
+        this.addShockwave(x, y);
+        this.spray(resolved, SWEEP_BURST);
+        this.sweepFlashLeft = SWEEP_FLASH_MS;
+        this.addPopup('CLEAR!', x, y - HOLE_RADIUS - 46, COLORS.star, 56);
+
         for (const capy of [...this.capys]) {
             if (capy === resolved || !capy.emerge.hittable) continue;
 
@@ -347,6 +407,7 @@ export class PlayScreen implements Screen<PlayParams> {
                 capy.refreshHealth();
             }
 
+            this.spray(capy, SOFT_BURST);
             this.payBounty(capy, SWEEP_POINTS);
             capy.emerge.retreat();
         }
@@ -361,9 +422,13 @@ export class PlayScreen implements Screen<PlayParams> {
      */
     private apply(capy: Capy, outcome: TapOutcome): void {
         if (outcome.hit) {
+            const before = this.combo.multiplier;
             this.combo.recordHit();
             this.hits += 1;
             this.stepWhacks += 1;
+            // Punch the label on the frame the ladder steps up, so the combo
+            // answers the streak instead of just reporting it.
+            if (this.combo.multiplier > before) this.comboPunch = COMBO_PUNCH_MS;
         } else {
             this.recordMiss();
         }
@@ -423,6 +488,8 @@ export class PlayScreen implements Screen<PlayParams> {
 
             // A hazard letting itself out is the player playing correctly, not a
             // miss — so it costs no accuracy and breaks no streak.
+            // Leaving is silent on purpose: sparks belong to taps, and a capy
+            // sinking on its own should not look like one landed.
             if (!capy.isSettled && !capy.type.harmful) {
                 this.recordMiss();
                 this.updateHud();
@@ -467,7 +534,6 @@ export class PlayScreen implements Screen<PlayParams> {
     /**
      * End the stage. Every path — beating it *or* running out of clock — goes
      * through Results, so the player always sees score, stars and accuracy.
-     * Stage 1 starts from there, when the player taps Next.
      */
     private finish(): void {
         const stage = this.stage;
@@ -485,6 +551,7 @@ export class PlayScreen implements Screen<PlayParams> {
             stars: starsFor(this.score.score, stage.starThresholds),
         };
 
+        // Results owns what comes next: the next stage, or the celebration.
         void this.context?.screens.start(SCREENS.Results, results);
     }
 
@@ -493,18 +560,18 @@ export class PlayScreen implements Screen<PlayParams> {
     private createHud(ui: Container, responsive: Responsive): void {
         this.scoreLabel = createLabel('0', { fontSize: 52 });
         this.scoreLabel.anchor.set(0, 0.5);
-        this.scoreLabel.position.set(56, 92);
+        this.scoreLabel.position.set(56, HUD_ROW_Y);
         ui.addChild(this.scoreLabel);
 
         this.timerLabel = createLabel('0', { fontSize: 52 });
         this.timerLabel.anchor.set(0.5, 0.5);
-        this.timerLabel.position.set(SCREEN_CENTER.x, 92);
+        this.timerLabel.position.set(SCREEN_CENTER.x, HUD_ROW_Y);
         this.timerLabel.visible = false;
         ui.addChild(this.timerLabel);
 
         this.comboLabel = createLabel('', { fontSize: 26, fill: COLORS.star });
-        this.comboLabel.anchor.set(1, 0.5);
-        this.comboLabel.position.set(GAME_WIDTH - 150, 92);
+        this.comboLabel.anchor.set(0.5, 0.5);
+        this.comboLabel.position.set(SCREEN_CENTER.x, COMBO_Y);
         ui.addChild(this.comboLabel);
 
         this.promptLabel = createLabel('', { fontSize: 30 });
@@ -513,8 +580,15 @@ export class PlayScreen implements Screen<PlayParams> {
         ui.addChild(this.promptLabel);
 
         const pause = createButton('II', () => this.togglePause(), { width: 84, height: 62, fontSize: 26 });
-        pause.position.set(GAME_WIDTH - 72, 92);
+        pause.position.set(GAME_WIDTH - 72, HUD_ROW_Y);
         ui.addChild(pause);
+
+        // The golden's wash, invisible until a sweep fires it. Added before the
+        // pause overlay so pausing still dims over the top of it, and left
+        // non-interactive so it can never swallow a tap.
+        this.sweepFlash = createColorBackground(COLORS.star, responsive);
+        this.sweepFlash.alpha = 0;
+        ui.addChild(this.sweepFlash);
 
         this.pauseOverlay = this.createPauseOverlay(responsive);
         this.pauseOverlay.visible = false;
@@ -575,6 +649,37 @@ export class PlayScreen implements Screen<PlayParams> {
 
     // --- Juice --------------------------------------------------------------
 
+    /**
+     * Throw a burst of sparks out of `capy`'s hole, in its own colour.
+     *
+     * Position comes from the hole, not the capy, so a `runner` that just moved
+     * still throws its sparks where the tap actually landed — hit testing reads
+     * the same slot, so the sparks and the popup never disagree.
+     */
+    private spray(capy: Capy, options: Omit<BurstOptions, 'x' | 'y'>, color: number = capy.type.color): void {
+        if (!this.fxLayer) return;
+
+        const burst = new Burst(color, { ...options, x: capy.hole.slot.x, y: capy.hole.slot.y });
+        this.fxLayer.addChild(burst);
+        this.bursts.push(burst);
+    }
+
+    /** The ring a clear leaves behind, reaching out across the whole honeycomb. */
+    private addShockwave(x: number, y: number): void {
+        if (!this.fxLayer) return;
+
+        const wave = new Shockwave({
+            x,
+            y,
+            fromRadius: HOLE_RADIUS,
+            toRadius: HOLE_SPACING * 1.7,
+            ms: SWEEP_RING_MS,
+            color: COLORS.star,
+        });
+        this.fxLayer.addChild(wave);
+        this.shockwaves.push(wave);
+    }
+
     private spawnPopup(capy: Capy, points: number): void {
         this.addPopup(
             `${points >= 0 ? '+' : ''}${points}`,
@@ -588,11 +693,11 @@ export class PlayScreen implements Screen<PlayParams> {
      * Float any label above the popup layer, e.g. "Miss!" for a whiff. Sharing
      * this with score popups keeps rise speed and fade identical for both.
      */
-    private addPopup(text: string, x: number, y: number, fill: number): void {
+    private addPopup(text: string, x: number, y: number, fill: number, fontSize = 36): void {
         if (!this.popupLayer) return;
 
         const label = createLabel(text, {
-            fontSize: 36,
+            fontSize,
             fill,
             stroke: { color: COLORS.black, width: 3 },
         });
@@ -615,5 +720,41 @@ export class PlayScreen implements Screen<PlayParams> {
                 this.popups.splice(i, 1);
             }
         }
+    }
+
+    /**
+     * Tick the one-shot effects and drop the ones that have played out.
+     *
+     * Each effect reports its own `finished` rather than the screen timing it,
+     * so adding another kind is a new array and one more loop, not a new timer.
+     * The combo punch lives here too: it is per-frame decoration, and nothing
+     * else is guaranteed to run every frame once the countdown is gone.
+     */
+    private updateEffects(dt: number): void {
+        for (let i = this.bursts.length - 1; i >= 0; i--) {
+            const burst = this.bursts[i];
+            burst.update(dt);
+            if (!burst.finished) continue;
+
+            burst.destroy({ children: true });
+            this.bursts.splice(i, 1);
+        }
+
+        for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+            const wave = this.shockwaves[i];
+            wave.update(dt);
+            if (!wave.finished) continue;
+
+            wave.destroy({ children: true });
+            this.shockwaves.splice(i, 1);
+        }
+
+        if (this.sweepFlashLeft > 0) {
+            this.sweepFlashLeft = Math.max(0, this.sweepFlashLeft - dt);
+            if (this.sweepFlash) this.sweepFlash.alpha = SWEEP_FLASH_PEAK * (this.sweepFlashLeft / SWEEP_FLASH_MS);
+        }
+
+        if (this.comboPunch > 0) this.comboPunch = Math.max(0, this.comboPunch - dt);
+        if (this.comboLabel) this.comboLabel.scale.set(1 + COMBO_PUNCH_SCALE * (this.comboPunch / COMBO_PUNCH_MS));
     }
 }

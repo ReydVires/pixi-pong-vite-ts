@@ -5,12 +5,13 @@
  * `multiplier` when awarding points. A miss (or a hazard tap) resets the run.
  */
 export class ComboTracker {
+    /** Hits needed to earn the next step up the multiplier ladder. */
+    private readonly perStep = 4;
+    /** Ceiling the multiplier stops climbing at. */
+    private readonly cap = 5;
+
     private streak = 0;
     private bestStreak = 0;
-
-    /** Hits in the current run. */
-    private readonly perStep = 4;
-    private readonly cap = 5;
 
     get count(): number {
         return this.streak;

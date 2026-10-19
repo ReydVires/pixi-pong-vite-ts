@@ -4,6 +4,7 @@ import { HitTarget } from '../components/HitTarget';
 import { COLORS } from '../config';
 import { Entity } from '../core/entities/Entity';
 import type { CapyType } from '../levels/types';
+import { drawCapyFace } from './capyFace';
 import type { Hole } from './Hole';
 
 /** How long a hit flash stays visible, in ms. */
@@ -26,8 +27,9 @@ const PIP_MIN_PROGRESS = 0.5;
  * it takes. Deciding what a tap *means* — points, hazards, clearing the field —
  * belongs to `PlayScreen`, which owns the stage rules.
  *
- * The body is drawn from circles as a placeholder for real art; swapping in a
- * sprite later only touches `createBody()`.
+ * The body is drawn from rounded rectangles as a placeholder for real art;
+ * swapping in a sprite later only touches `createBody()`. The face itself comes
+ * from `drawCapyFace`, so the finale's present can hold the same capy.
  */
 export class Capy extends Entity {
     readonly type: CapyType;
@@ -168,30 +170,7 @@ export class Capy extends Entity {
         const r = this.headRadius;
         const body = new Graphics();
 
-        // Capybara silhouette: a blocky skull and a blunt, squared muzzle.
-        // Deliberately built from rounded rectangles — a plain circle with
-        // round ears on top reads "bear", which is what this replaces.
-        body.roundRect(-r * 0.95, -r * 0.75, r * 1.9, r * 1.3, r * 0.4).fill(this.type.color);
-        body.roundRect(-r * 0.725, r * 0.145, r * 1.45, r * 0.75, r * 0.32).fill(this.type.color);
-
-        // Ears: tiny nubs poking above the top corners, not discs.
-        body.circle(-r * 0.68, -r * 0.7, r * 0.16).fill(this.type.color);
-        body.circle(r * 0.68, -r * 0.7, r * 0.16).fill(this.type.color);
-        body.circle(-r * 0.68, -r * 0.7, r * 0.08).fill(this.type.accent);
-        body.circle(r * 0.68, -r * 0.7, r * 0.08).fill(this.type.accent);
-
-        // Eyes: high on the skull and wide apart, as a capybara's are.
-        body.circle(-r * 0.52, -r * 0.3, r * 0.13).fill(0xffffff);
-        body.circle(r * 0.52, -r * 0.3, r * 0.13).fill(0xffffff);
-        body.circle(-r * 0.5, -r * 0.3, r * 0.065).fill(0x1b1b1b);
-        body.circle(r * 0.5, -r * 0.3, r * 0.065).fill(0x1b1b1b);
-
-        // Nose: a wide oval on the muzzle, darkened from the coat so it always
-        // silhouettes — a fixed brown disappears on the dark bomb coat.
-        const nose = darken(this.type.color, 0.62);
-        body.ellipse(0, r * 0.42, r * 0.36, r * 0.26).fill(nose);
-        body.circle(-r * 0.13, r * 0.38, r * 0.05).fill(0x1b1b1b);
-        body.circle(r * 0.13, r * 0.38, r * 0.05).fill(0x1b1b1b);
+        drawCapyFace(body, r, this.type);
 
         if (this.type.harmful) {
             // Warning marker above the skull, clear of the ears.
@@ -226,10 +205,4 @@ export class Capy extends Entity {
             this.pips.circle(startX + i * (size + gap), y, size / 2).fill(0xffffff);
         }
     }
-}
-
-/** Push a hex colour toward black — `amount` in [0,1]. Keeps the hue. */
-function darken(color: number, amount: number): number {
-    const channel = (shift: number): number => Math.round(((color >> shift) & 0xff) * (1 - amount));
-    return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 }

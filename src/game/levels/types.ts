@@ -81,6 +81,12 @@ export interface StageDef {
     starThresholds: readonly [number, number, number];
     /** Present ⇒ the stage is scripted instead of randomly spawned. */
     tutorial?: readonly TutorialStep[];
-    /** Marks the last stage: its Results button reveals the celebration. */
+    /**
+     * Marks this stage's Results button as the one that reveals the celebration.
+     *
+     * The last stage is the finale by default, so appending a stage carries the
+     * ending along with it; setting this replaces that default outright. Only
+     * one stage ever holds it. See `isFinaleStage`.
+     */
     finale?: boolean;
 }

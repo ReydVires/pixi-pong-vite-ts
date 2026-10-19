@@ -151,3 +151,22 @@ export function findNextStage(id: string): StageDef | null {
     if (index === -1 || index + 1 >= STAGES.length) return null;
     return STAGES[index + 1];
 }
+
+/**
+ * The stage whose Results screen reveals the celebration.
+ *
+ * The bottom of the table is the ending by default, so appending a stage to
+ * `STAGES` carries the finale along with it and nothing has to be remembered.
+ * Marking any stage `finale: true` replaces that default outright — it is the
+ * one way to end somewhere other than the last row. Exactly one stage is ever
+ * the finale, so the gift can never be reached twice.
+ */
+export function finaleStage(): StageDef {
+    return STAGES.find((candidate) => candidate.finale) ?? STAGES[STAGES.length - 1];
+}
+
+/** Whether `id` is the stage that leads to the celebration. See `finaleStage`. */
+export function isFinaleStage(id: string): boolean {
+    findStage(id);
+    return finaleStage().id === id;
+}

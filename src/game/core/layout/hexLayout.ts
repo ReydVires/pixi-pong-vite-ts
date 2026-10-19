@@ -137,7 +137,7 @@ function hexSlots(count: number, spacing: number, centerX: number, centerY: numb
     }));
 }
 
-/** Square-grid centres — the documented fallback if the honeycomb ever misbehaves. */
+/** Square-grid centres — what the tutorial uses: four holes beat a honeycomb to learn on. */
 function gridSlots(count: number, spacing: number, centerX: number, centerY: number): { x: number; y: number }[] {
     const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
     const rows = Math.ceil(count / cols);
