@@ -69,6 +69,43 @@ const SWEEP_FLASH_MS = 240;
 const SWEEP_FLASH_PEAK = 0.25;
 /** How far a sweep's ring reaches — past the last hole on the widest layout. */
 const SWEEP_RING_MS = 380;
+/**
+ * The kick a combo milestone gives the playfield.
+ *
+ * Short and small on purpose: hit testing reads the holes' own slots, so the
+ * shake is decoration taps never see, and it has to be over before the player
+ * needs to aim again. The amplitude dies with the square of the time left,
+ * which is what makes it read as one hit rather than a wobble.
+ */
+const SHAKE_MS = 320;
+const SHAKE_AMPLITUDE = 10;
+/** Two rates, in ms per radian, so the axes never move as one neat wobble. */
+const SHAKE_X_RATE = 21;
+const SHAKE_Y_RATE = 14;
+/** How much of the kick goes sideways — a field shakes more than it bounces. */
+const SHAKE_Y_SCALE = 0.7;
+/**
+ * What the ladder shouts at each step up, keyed by multiplier.
+ *
+ * The shout replaces nothing: a milestone keeps its sparks and its score, and
+ * gets this on top. There is no entry for x1, because the ladder starts there.
+ */
+const COMBO_WORDS: Record<number, string> = {
+    2: 'NICE!',
+    3: 'GREAT!',
+    4: 'AWESOME!',
+    5: 'UNSTOPPABLE!',
+};
+/** Lifetime of the shout, in ms. */
+const COMBO_WORD_MS = 760;
+/** Shout size — louder than the combo line it covers, quieter than a title. */
+const COMBO_WORD_SIZE = 46;
+/** Share of the life spent growing, so the shout erupts rather than fades in. */
+const COMBO_WORD_POP = 0.22;
+/** Scale it erupts from; it grows into its own size from here. */
+const COMBO_WORD_FROM = 0.3;
+/** Share of the life held at full strength; everything after that fades out. */
+const COMBO_WORD_HOLD = 0.6;
 
 export interface PlayParams {
     stageId: string;
@@ -122,11 +159,20 @@ export class PlayScreen implements Screen<PlayParams> {
 
     private popupLayer: Container | null = null;
     private fxLayer: Container | null = null;
+    /** Everything the playfield is made of, so a milestone can kick all of it. */
+    private field: Container | null = null;
     private sweepFlash: Graphics | null = null;
     /** Milliseconds left on the golden's full-screen wash. */
     private sweepFlashLeft = 0;
     /** Milliseconds left on the combo label's punch. */
     private comboPunch = 0;
+    /** The ladder's shout, shown in place of the combo line while it plays. */
+    private comboWord: Text | null = null;
+    /** Milliseconds left on that shout; 0 means it is hidden. */
+    private wordLeft = 0;
+    /** Milliseconds left on the field's kick, and how far into it we are. */
+    private shakeLeft = 0;
+    private shakeTime = 0;
     private scoreLabel: Text | null = null;
     private comboLabel: Text | null = null;
     private timerLabel: Text | null = null;
@@ -152,23 +198,30 @@ export class PlayScreen implements Screen<PlayParams> {
             spacing: HOLE_SPACING,
             radius: HOLE_RADIUS,
         });
+        // Everything the whack happens *to*, in one container. This is what a
+        // combo milestone kicks, which is why the backdrop stays out of it
+        // (moving it would show the letterbox edges) and why the HUD lives in
+        // `ui` (a shaking score is a score nobody can read).
+        this.field = new Container();
+        world.addChild(this.field);
+
         for (const slot of slots) {
             const hole = new Hole(slot);
             this.holes.push(hole);
-            world.addChild(hole);
+            this.field.addChild(hole);
         }
 
         // Effects sit above the holes — a whack's sparks should cover the mound
         // they came out of — but below the popups, so a floating score is never
         // buried under its own explosion.
         this.fxLayer = new Container();
-        world.addChild(this.fxLayer);
+        this.field.addChild(this.fxLayer);
 
         // Added last on purpose: score popups float above the mound they rise
         // from. Adding this layer before the holes tucks every "+10" behind
         // the hole, so it vanishes as soon as it drifts over one.
         this.popupLayer = new Container();
-        world.addChild(this.popupLayer);
+        this.field.addChild(this.popupLayer);
 
         this.createHud(ui, responsive);
 
@@ -238,9 +291,14 @@ export class PlayScreen implements Screen<PlayParams> {
         this.spawner = null;
         this.popupLayer = null;
         this.fxLayer = null;
+        this.field = null;
         this.sweepFlash = null;
         this.sweepFlashLeft = 0;
         this.comboPunch = 0;
+        this.comboWord = null;
+        this.wordLeft = 0;
+        this.shakeLeft = 0;
+        this.shakeTime = 0;
         this.scoreLabel = null;
         this.comboLabel = null;
         this.timerLabel = null;
@@ -426,9 +484,10 @@ export class PlayScreen implements Screen<PlayParams> {
             this.combo.recordHit();
             this.hits += 1;
             this.stepWhacks += 1;
-            // Punch the label on the frame the ladder steps up, so the combo
-            // answers the streak instead of just reporting it.
-            if (this.combo.multiplier > before) this.comboPunch = COMBO_PUNCH_MS;
+            // The ladder stepping up is the moment worth answering, not just
+            // reporting — so the label punches, the field kicks and the ladder
+            // shouts, all from the same frame.
+            if (this.combo.multiplier > before) this.celebrateCombo(this.combo.multiplier);
         } else {
             this.recordMiss();
         }
@@ -574,6 +633,20 @@ export class PlayScreen implements Screen<PlayParams> {
         this.comboLabel.position.set(SCREEN_CENTER.x, COMBO_Y);
         ui.addChild(this.comboLabel);
 
+        // The milestone's shout: the combo line's own spot, so the ladder's
+        // answer arrives exactly where the ladder is read. Built once and
+        // re-shown, because a shout is a visibility flip — not new text laid
+        // out in the middle of a tap.
+        this.comboWord = createLabel('', {
+            fontSize: COMBO_WORD_SIZE,
+            fill: COLORS.star,
+            stroke: { width: 5 },
+        });
+        this.comboWord.anchor.set(0.5, 0.5);
+        this.comboWord.position.set(SCREEN_CENTER.x, COMBO_Y);
+        this.comboWord.visible = false;
+        ui.addChild(this.comboWord);
+
         this.promptLabel = createLabel('', { fontSize: 30 });
         this.promptLabel.anchor.set(0.5, 0.5);
         this.promptLabel.position.set(SCREEN_CENTER.x, 950);
@@ -650,6 +723,32 @@ export class PlayScreen implements Screen<PlayParams> {
     // --- Juice --------------------------------------------------------------
 
     /**
+     * A step up the combo ladder: punch the line, kick the field, shout it.
+     *
+     * The whack that caused this already threw its own sparks, so a milestone
+     * adds weight and a word rather than more particles — the ladder should feel
+     * like a new tier, not like a slightly bigger hit. The word lands on the
+     * combo line it answers, which is the one band free in every layout: under
+     * the HUD, clear of the topmost hole and its own score popup.
+     */
+    private celebrateCombo(multiplier: number): void {
+        this.comboPunch = COMBO_PUNCH_MS;
+        this.shakeLeft = SHAKE_MS;
+        this.shakeTime = 0;
+
+        const label = this.comboWord;
+        const word = COMBO_WORDS[multiplier];
+        // A ladder longer than the table still gets its kick, just no word.
+        if (!label || !word) return;
+
+        label.text = word;
+        label.visible = true;
+        label.alpha = 1;
+        label.scale.set(COMBO_WORD_FROM);
+        this.wordLeft = COMBO_WORD_MS;
+    }
+
+    /**
      * Throw a burst of sparks out of `capy`'s hole, in its own colour.
      *
      * Position comes from the hole, not the capy, so a `runner` that just moved
@@ -723,12 +822,66 @@ export class PlayScreen implements Screen<PlayParams> {
     }
 
     /**
+     * Take the kick, then put the field back exactly where it belongs.
+     *
+     * Both axes start at zero and the amplitude dies with the clock left, so
+     * the field is never snapped sideways the frame a shout lands, and never
+     * left sitting off-centre once the kick is over.
+     */
+    private updateShake(dt: number): void {
+        const field = this.field;
+        if (!field) return;
+
+        if (this.shakeLeft <= 0) {
+            if (field.x !== 0 || field.y !== 0) field.position.set(0, 0);
+            return;
+        }
+
+        this.shakeLeft = Math.max(0, this.shakeLeft - dt);
+        this.shakeTime += dt;
+
+        const amp = SHAKE_AMPLITUDE * (this.shakeLeft / SHAKE_MS) ** 2;
+        field.position.set(
+            Math.sin(this.shakeTime / SHAKE_X_RATE) * amp,
+            Math.sin(this.shakeTime / SHAKE_Y_RATE) * amp * SHAKE_Y_SCALE,
+        );
+    }
+
+    /**
+     * Play the shout out — grow in, hold, fade — and hand the combo line back.
+     *
+     * The plain line is hidden while the shout is up rather than showing through
+     * it, and comes back reading whatever the streak is by then, so a miss taken
+     * during the shout still lands in the label.
+     */
+    private updateComboWord(dt: number): void {
+        const label = this.comboWord;
+        if (!label) return;
+
+        if (this.wordLeft > 0) {
+            this.wordLeft = Math.max(0, this.wordLeft - dt);
+
+            const t = 1 - this.wordLeft / COMBO_WORD_MS;
+            const grow = 1 - (1 - Math.min(1, t / COMBO_WORD_POP)) ** 2;
+            const fade = 1 - Math.max(0, t - COMBO_WORD_HOLD) / (1 - COMBO_WORD_HOLD);
+
+            label.scale.set(COMBO_WORD_FROM + (1 - COMBO_WORD_FROM) * grow);
+            label.alpha = Math.max(0, fade);
+
+            if (this.wordLeft === 0) label.visible = false;
+        }
+
+        if (this.comboLabel) this.comboLabel.visible = this.wordLeft <= 0;
+    }
+
+    /**
      * Tick the one-shot effects and drop the ones that have played out.
      *
      * Each effect reports its own `finished` rather than the screen timing it,
      * so adding another kind is a new array and one more loop, not a new timer.
-     * The combo punch lives here too: it is per-frame decoration, and nothing
-     * else is guaranteed to run every frame once the countdown is gone.
+     * The combo punch and the kick live here too: they are per-frame decoration,
+     * and nothing else is guaranteed to run every frame once the countdown is
+     * gone.
      */
     private updateEffects(dt: number): void {
         for (let i = this.bursts.length - 1; i >= 0; i--) {
@@ -756,5 +909,8 @@ export class PlayScreen implements Screen<PlayParams> {
 
         if (this.comboPunch > 0) this.comboPunch = Math.max(0, this.comboPunch - dt);
         if (this.comboLabel) this.comboLabel.scale.set(1 + COMBO_PUNCH_SCALE * (this.comboPunch / COMBO_PUNCH_MS));
+
+        this.updateShake(dt);
+        this.updateComboWord(dt);
     }
 }
