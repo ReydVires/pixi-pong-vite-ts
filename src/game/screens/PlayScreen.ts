@@ -1,0 +1,486 @@
+import { Container, Graphics } from 'pixi.js';
+import type { Text } from 'pixi.js';
+import { ASSETS, COLORS, GAME_HEIGHT, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
+import { createColorBackground, createTextureBackground } from '../core/display/Background';
+import { createButton } from '../core/display/Button';
+import { createLabel } from '../core/display/Label';
+import type { Unsubscribe } from '../core/input/PointerInput';
+import { holeSlots } from '../core/layout/hexLayout';
+import type { Screen, ScreenContext } from '../core/screens/Screen';
+import { Hole } from '../entities/Hole';
+import { Mouse } from '../entities/Mouse';
+import { MOUSE_TYPES } from '../levels/mouseTypes';
+import { findStage } from '../levels/stages';
+import type { MouseTypeId, StageDef, TutorialStep } from '../levels/types';
+import { ComboTracker } from '../systems/ComboTracker';
+import { ScoreKeeper, starsFor } from '../systems/ScoreKeeper';
+import { pickSpawn, Spawner } from '../systems/Spawner';
+import { SessionClock } from '../systems/SessionClock';
+import type { ResultsParams } from './ResultsScreen';
+
+/** Centre of the honeycomb in design units — leaves room for HUD and prompt. */
+const GRID_CENTER_Y = 560;
+const HOLE_SPACING = 230;
+const HOLE_RADIUS = 74;
+/** Taps aim at hole centres, not exact pixels — keep it generous for thumbs. */
+const TAP_RADIUS_SCALE = 1.1;
+/** Above this line is HUD chrome (score/timer/pause), never playfield. */
+const HUD_ZONE_Y = 170;
+/** How long a wounded mouse stays put so it can be finished off, in ms. */
+const WOUND_GRACE_MS = 1500;
+/** Lifetime of a floating score popup, in ms. */
+const POPUP_MS = 700;
+
+export interface PlayParams {
+    stageId: string;
+}
+
+interface Popup {
+    label: Text;
+    life: number;
+}
+
+/**
+ * Runs one stage.
+ *
+ * The stage itself is data (`StageDef`); this screen owns the things data
+ * can't express — which hole a mouse goes in, what a tap means, and when the
+ * stage is over. Scripted stages are driven by `tutorial`; random ones by
+ * `Spawner` and a `SessionClock`.
+ *
+ * Hit testing is deliberately centralised: one `pointerdown` listener tests
+ * every hittable mouse, and a tap that hits none is a miss. That keeps
+ * accuracy accounting honest, which a listener-per-mouse would muddy.
+ */
+export class PlayScreen implements Screen<PlayParams> {
+    private context: ScreenContext | null = null;
+    private stage: StageDef | null = null;
+
+    private readonly holes: Hole[] = [];
+    private readonly mice: Mouse[] = [];
+    private readonly popups: Popup[] = [];
+    private readonly pendingRetirement: Mouse[] = [];
+
+    private clock: SessionClock | null = null;
+    private spawner: Spawner | null = null;
+
+    private readonly score = new ScoreKeeper();
+    private readonly combo = new ComboTracker();
+    private hits = 0;
+    private misses = 0;
+    private spawned = 0;
+
+    /** Scripted-stage progress. */
+    private stepIndex = 0;
+    private stepWhacks = 0;
+    private stepElapsed = 0;
+    private stepCooldown = 0;
+
+    private finished = false;
+    private paused = false;
+
+    private popupLayer: Container | null = null;
+    private scoreLabel: Text | null = null;
+    private comboLabel: Text | null = null;
+    private timerLabel: Text | null = null;
+    private promptLabel: Text | null = null;
+    private pauseOverlay: Container | null = null;
+
+    private stopTap: Unsubscribe | null = null;
+    private stopPauseKey: Unsubscribe | null = null;
+
+    init(context: ScreenContext, params: PlayParams): void {
+        const { world, ui, assets, input, keyboard, responsive } = context;
+
+        const stage = findStage(params.stageId);
+        this.context = context;
+        this.stage = stage;
+
+        world.addChild(createColorBackground(COLORS.playfield, responsive));
+        world.addChild(createTextureBackground(assets.texture(ASSETS.background), responsive, 0.45));
+
+        const slots = holeSlots(stage.holes, stage.layout, {
+            centerX: SCREEN_CENTER.x,
+            centerY: GRID_CENTER_Y,
+            spacing: HOLE_SPACING,
+            radius: HOLE_RADIUS,
+        });
+        for (const slot of slots) {
+            const hole = new Hole(slot);
+            this.holes.push(hole);
+            world.addChild(hole);
+        }
+
+        // Added last on purpose: score popups float above the mound they rise
+        // from. Adding this layer before the holes tucks every "+10" behind
+        // the hole, so it vanishes as soon as it drifts over one.
+        this.popupLayer = new Container();
+        world.addChild(this.popupLayer);
+
+        this.createHud(ui);
+
+        if (stage.durationMs !== null) {
+            this.clock = new SessionClock(stage.durationMs);
+            this.spawner = new Spawner({
+                intervalMs: stage.spawnIntervalMs,
+                maxConcurrent: stage.maxConcurrent,
+            });
+            this.timerLabel!.visible = true;
+        }
+
+        // A stage can be timed *and* scripted — the tutorial is both.
+        this.promptLabel!.text = stage.tutorial ? stage.tutorial[0].prompt : stage.title;
+
+        this.stopTap = input.on((event) => {
+            const point = responsive.toWorld(event);
+            this.handleTap(point.x, point.y);
+        });
+        this.stopPauseKey = keyboard.onKeyDown('Escape', () => this.togglePause());
+
+        this.updateHud();
+    }
+
+    update(dt: number): void {
+        const stage = this.stage;
+        if (!stage || this.paused || this.finished) return;
+
+        if (this.clock) {
+            this.clock.update(dt);
+            this.updateHud();
+            if (this.clock.expired) {
+                this.finish();
+                return;
+            }
+        }
+
+        if (stage.tutorial) this.updateTutorialStage(dt, stage);
+        else this.updateRandomStage(dt, stage);
+
+        // A transition may have started above — don't touch torn-down state.
+        if (this.finished) return;
+
+        for (const mouse of this.mice) mouse.update(dt);
+        this.flushRetired();
+        this.updatePopups(dt);
+    }
+
+    destroy(): void {
+        this.stopTap?.();
+        this.stopPauseKey?.();
+        this.stopTap = null;
+        this.stopPauseKey = null;
+
+        for (const popup of this.popups) popup.label.destroy();
+        this.popups.length = 0;
+        this.pendingRetirement.length = 0;
+        this.mice.length = 0;
+        this.holes.length = 0;
+
+        this.context = null;
+        this.stage = null;
+        this.clock = null;
+        this.spawner = null;
+        this.popupLayer = null;
+        this.scoreLabel = null;
+        this.comboLabel = null;
+        this.timerLabel = null;
+        this.promptLabel = null;
+        this.pauseOverlay = null;
+    }
+
+    // --- Random stages ------------------------------------------------------
+
+    private updateRandomStage(dt: number, stage: StageDef): void {
+        const spawner = this.spawner;
+        if (!spawner) return;
+
+        if (spawner.update(dt, this.mice.length)) {
+            const hole = this.pickFreeHole();
+            if (hole) this.spawn(pickSpawn(stage.spawn), hole, false);
+        }
+    }
+
+    // --- Scripted (tutorial) stages ----------------------------------------
+
+    private updateTutorialStage(dt: number, stage: StageDef): void {
+        const steps = stage.tutorial;
+        if (!steps || this.stepIndex >= steps.length) {
+            this.finish();
+            return;
+        }
+
+        const step: TutorialStep = steps[this.stepIndex];
+        this.stepElapsed += dt;
+        this.stepCooldown -= dt;
+
+        const quotaMet = step.quota !== undefined && this.stepWhacks >= step.quota;
+        const timeMet = step.durationMs !== undefined && this.stepElapsed >= step.durationMs;
+        const stepComplete = quotaMet || timeMet;
+
+        // Stop spawning once the step is satisfied, then wait for the field to
+        // clear so the next prompt never arrives on top of a live mouse.
+        if (!stepComplete && this.stepCooldown <= 0 && this.mice.length < step.concurrent) {
+            const hole = this.pickFreeHole();
+            if (hole) {
+                this.spawn('normal', hole, step.hold ?? false);
+                this.stepCooldown = Math.max(0, step.intervalMs);
+            }
+        }
+
+        if (stepComplete && this.mice.length === 0) this.advanceStep();
+    }
+
+    private advanceStep(): void {
+        const steps = this.stage?.tutorial;
+        if (!steps) return;
+
+        this.stepIndex += 1;
+        this.stepWhacks = 0;
+        this.stepElapsed = 0;
+        this.stepCooldown = 300;
+
+        if (this.stepIndex >= steps.length) {
+            this.finish();
+            return;
+        }
+
+        this.promptLabel!.text = steps[this.stepIndex].prompt;
+    }
+
+    // --- Taps ----------------------------------------------------------------
+
+    private handleTap(x: number, y: number): void {
+        if (this.paused || this.finished) return;
+
+        const target = this.mice.find((mouse) => mouse.emerge.hittable && mouse.near(x, y, TAP_RADIUS_SCALE));
+        if (target) {
+            this.whack(target);
+            return;
+        }
+
+        // A whiff. Skip the HUD strip — tapping pause isn't a miss — and skip
+        // the moment before the first spawn, so it doesn't poison accuracy.
+        if (y < HUD_ZONE_Y || this.spawned === 0) return;
+
+        this.misses += 1;
+        this.combo.recordMiss();
+        this.updateHud();
+    }
+
+    private whack(mouse: Mouse): void {
+        const downed = mouse.hitTarget.hit();
+        mouse.flash();
+
+        if (!downed) {
+            // Still ticking: give it a grace window rather than fleeing mid-fight.
+            if (mouse.type.staysWhenHit) mouse.emerge.retain(WOUND_GRACE_MS);
+            mouse.refreshHealth();
+            return;
+        }
+
+        mouse.markSettled();
+        this.award(mouse);
+
+        if (mouse.type.effect === 'clear') this.clearField(mouse);
+
+        mouse.emerge.retreat();
+    }
+
+    /** A clear effect resolves everything else on the field. */
+    private clearField(resolved: Mouse): void {
+        for (const mouse of [...this.mice]) {
+            if (mouse === resolved) continue;
+
+            mouse.markSettled();
+            if (!mouse.type.harmful) {
+                mouse.hitTarget.forceDown();
+                mouse.refreshHealth();
+                this.award(mouse);
+            }
+            mouse.emerge.retreat();
+        }
+    }
+
+    private award(mouse: Mouse): void {
+        const points = mouse.type.points * this.combo.multiplier;
+
+        this.score.add(points);
+        this.combo.recordHit();
+        this.hits += 1;
+        this.stepWhacks += 1;
+
+        this.spawnPopup(mouse, points);
+        this.updateHud();
+    }
+
+    // --- Spawning -----------------------------------------------------------
+
+    private pickFreeHole(): Hole | null {
+        const free = this.holes.filter((hole) => hole.free);
+        if (free.length === 0) return null;
+        return free[Math.floor(Math.random() * free.length)];
+    }
+
+    private spawn(typeId: MouseTypeId, hole: Hole, hold: boolean): void {
+        const mouse = new Mouse(MOUSE_TYPES[typeId], hole, hold);
+
+        mouse.onRetreated = () => this.pendingRetirement.push(mouse);
+        hole.mount(mouse);
+        this.mice.push(mouse);
+        this.spawned += 1;
+        mouse.start();
+    }
+
+    /** Free holes that finished sinking away, and score any that escaped. */
+    private flushRetired(): void {
+        if (this.pendingRetirement.length === 0) return;
+
+        for (const mouse of this.pendingRetirement.splice(0)) {
+            if (!mouse.isSettled) {
+                this.misses += 1;
+                this.combo.recordMiss();
+                this.updateHud();
+            }
+
+            const index = this.mice.indexOf(mouse);
+            if (index !== -1) this.mice.splice(index, 1);
+
+            mouse.onRetreated = null;
+            mouse.parent?.removeChild(mouse);
+            mouse.destroy({ children: true });
+        }
+    }
+
+    // --- Stage end ----------------------------------------------------------
+
+    private finish(): void {
+        const stage = this.stage;
+        if (!stage || this.finished) return;
+        this.finished = true;
+
+        const attempts = this.hits + this.misses;
+        const results: ResultsParams = {
+            stageId: stage.id,
+            score: this.score.score,
+            hits: this.hits,
+            misses: this.misses,
+            accuracy: attempts > 0 ? this.hits / attempts : 0,
+            bestCombo: this.combo.bestCount,
+            stars: starsFor(this.score.score, stage.starThresholds),
+        };
+
+        void this.context?.screens.start(SCREENS.Results, results);
+    }
+
+    // --- HUD ----------------------------------------------------------------
+
+    private createHud(ui: Container): void {
+        this.scoreLabel = createLabel('0', { fontSize: 52 });
+        this.scoreLabel.anchor.set(0, 0.5);
+        this.scoreLabel.position.set(56, 92);
+        ui.addChild(this.scoreLabel);
+
+        this.timerLabel = createLabel('0', { fontSize: 52 });
+        this.timerLabel.anchor.set(0.5, 0.5);
+        this.timerLabel.position.set(SCREEN_CENTER.x, 92);
+        this.timerLabel.visible = false;
+        ui.addChild(this.timerLabel);
+
+        this.comboLabel = createLabel('', { fontSize: 26, fill: COLORS.star });
+        this.comboLabel.anchor.set(1, 0.5);
+        this.comboLabel.position.set(GAME_WIDTH - 150, 92);
+        ui.addChild(this.comboLabel);
+
+        this.promptLabel = createLabel('', { fontSize: 30 });
+        this.promptLabel.anchor.set(0.5, 0.5);
+        this.promptLabel.position.set(SCREEN_CENTER.x, 950);
+        ui.addChild(this.promptLabel);
+
+        const pause = createButton('II', () => this.togglePause(), { width: 84, height: 62, fontSize: 26 });
+        pause.position.set(GAME_WIDTH - 72, 92);
+        ui.addChild(pause);
+
+        this.pauseOverlay = this.createPauseOverlay();
+        this.pauseOverlay.visible = false;
+        ui.addChild(this.pauseOverlay);
+    }
+
+    private createPauseOverlay(): Container {
+        const overlay = new Container();
+
+        const dim = new Graphics().rect(0, 0, GAME_WIDTH, GAME_HEIGHT).fill({ color: COLORS.black, alpha: 0.65 });
+        dim.eventMode = 'static'; // swallow taps meant for the playfield
+        overlay.addChild(dim);
+
+        const title = createLabel('Paused', { fontSize: 64 });
+        title.anchor.set(0.5);
+        title.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 140);
+        overlay.addChild(title);
+
+        const resume = createButton('Resume', () => this.togglePause());
+        resume.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y);
+        overlay.addChild(resume);
+
+        const quit = createButton(
+            'Quit to Menu',
+            () => {
+                this.paused = false;
+                void this.context?.screens.start(SCREENS.MainMenu);
+            },
+            { fill: 0x3a3f4b },
+        );
+        quit.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 110);
+        overlay.addChild(quit);
+
+        return overlay;
+    }
+
+    private togglePause(): void {
+        this.paused = !this.paused;
+        if (this.pauseOverlay) this.pauseOverlay.visible = this.paused;
+    }
+
+    private updateHud(): void {
+        if (this.scoreLabel) this.scoreLabel.text = `${this.score.score}`;
+
+        if (this.comboLabel) {
+            const { multiplier, count } = this.combo;
+            this.comboLabel.text = count > 0 ? `x${multiplier}  combo ${count}` : '';
+        }
+
+        if (this.timerLabel && this.clock) {
+            this.timerLabel.text = `${Math.ceil(this.clock.remainingMs / 1000)}`;
+        }
+    }
+
+    // --- Juice --------------------------------------------------------------
+
+    private spawnPopup(mouse: Mouse, points: number): void {
+        if (!this.popupLayer) return;
+
+        const label = createLabel(`${points >= 0 ? '+' : ''}${points}`, {
+            fontSize: 36,
+            fill: points >= 0 ? COLORS.star : COLORS.hazard,
+            stroke: { color: COLORS.black, width: 3 },
+        });
+        label.anchor.set(0.5);
+        label.position.set(mouse.hole.slot.x, mouse.hole.slot.y - HOLE_RADIUS - 46);
+
+        this.popupLayer.addChild(label);
+        this.popups.push({ label, life: 0 });
+    }
+
+    private updatePopups(dt: number): void {
+        for (let i = this.popups.length - 1; i >= 0; i--) {
+            const popup = this.popups[i];
+            popup.life += dt;
+            popup.label.y -= 0.05 * dt;
+            popup.label.alpha = Math.max(0, 1 - popup.life / POPUP_MS);
+
+            if (popup.life >= POPUP_MS) {
+                popup.label.destroy();
+                this.popups.splice(i, 1);
+            }
+        }
+    }
+}

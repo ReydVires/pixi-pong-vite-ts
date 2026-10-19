@@ -1,5 +1,5 @@
 {
-    "name": "pixi-pong-vite-ts",
+    "name": "whack-a-mouse-vite-ts",
     "description": "A PixiJS v8 TypeScript template using Vite.",
     "version": "1.4.0",
     "license": "MIT",

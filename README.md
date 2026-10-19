@@ -51,11 +51,11 @@ npm run build    # produce an optimized build in dist/
 If you're new, do these in order:
 
 1. **Run it.** `npm install` then `npm run dev`.
-2. **Find the gameplay code.** Open `src/game/screens/PongScreen.ts` — this is "the game"
-   (a small Pong demo).
-   Change the message text, save, and watch it update live.
+2. **Find the gameplay code.** Open `src/game/screens/PlayScreen.ts` — this is "the game"
+   (Whack-a-Mouse: mice pop out of a honeycomb of holes, tap them before they duck back).
+   Change the prompt text in `src/game/levels/stages.ts`, save, and watch it update live.
 3. **Understand the flow.** The game boots in `src/main.ts` → `Game.ts` → the `Preloader`
-   screen → `MainMenu` → `Game` → `GameOver`. Tap anywhere to advance between them.
+   screen → `MainMenu` → `Play` → `Results`. Tap anywhere to advance between them.
 4. **Read one screen top to bottom.** `MainMenuScreen.ts` is the best example — it draws a
    background, adds a spinning logo, shows text, and reacts to a tap and to resizing.
 5. **Make a change.** Follow a recipe in the **[Cookbook](#cookbook-common-tasks)** — e.g.
@@ -71,7 +71,7 @@ index.html .................... paints the loading splash instantly (no JS requi
                ├── AssetLoader ... loads and caches textures + web fonts
                ├── Responsive .... fits the canvas to the screen, world/ui layers
                └── ScreenManager . owns the active screen and transitions
-                     └── Preloader → MainMenu → Game → GameOver
+                     └── Preloader → MainMenu → Play → Results
 ```
 
 Everything long-lived is created once in `Game.ts`. Screens are created and destroyed as you
@@ -115,16 +115,20 @@ src/
     │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
     │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
-    │   ├── display/            Building blocks: Background, Image, Label, ProgressBar
+    │   ├── display/            Building blocks: Background, Button, Image, Label, ProgressBar
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
+    │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
     │   └── entities/           Entity + Component — composable per-frame behaviors
-    ├── components/             Gameplay components (e.g. Spin) you attach to entities
+    ├── levels/                 What spawns: mouse archetypes + the stage table (data only)
+    ├── systems/                Pure rules: SessionClock, ScoreKeeper, ComboTracker, Spawner
+    ├── components/             Gameplay components (Emerge, HitTarget, Spin, Pulse)
+    ├── entities/               Display objects built from components: Hole, Mouse
     └── screens/                The actual game screens  ← most of your work happens here
         ├── index.ts            Registers every screen with the ScreenManager
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
         ├── MainMenuScreen.ts   Title screen (entity + Spin component demo)
-        ├── PongScreen.ts        The game itself (Pong demo of the composition model)
-        └── GameOverScreen.ts   Game over screen
+        ├── PlayScreen.ts       The game itself — runs one stage (Whack-a-Mouse)
+        └── ResultsScreen.ts    Post-stage summary: stars, score, Replay / Next / Menu
 ```
 
 Public files served as-is live in `public/` (e.g. `public/assets/bg.png`). The HTML shell is
@@ -158,7 +162,7 @@ The `ScreenContext` passed to `init()` is your toolbox:
 | `assets`      | Load assets with progress: `await assets.load(ASSETS.logo)`, `await assets.loadFont(FONTS.display)` |
 | `input`       | Pointer events scoped to this screen: `input.once(...)` / `input.on(...)` |
 | `keyboard`    | Keyboard scoped to this screen: `keyboard.isDown('ArrowLeft')`, `keyboard.onKeyDown('Escape', cb)` |
-| `screens`     | Navigate: `screens.start(SCREENS.Game)`                               |
+| `screens`     | Navigate: `screens.start(SCREENS.Play, { stageId })`                   |
 | `responsive`  | Viewport info + `toWorld(pointerEvent)`                               |
 | `app`         | The raw Pixi `Application`, if you need the renderer/ticker directly  |
 
@@ -171,23 +175,24 @@ containers and listeners before building the next one, and only ticks the active
 factory and `init()`. Declare the payload type on the screen that receives it:
 
 ```ts
-// The receiving screen declares what it expects:
-export interface GameOverParams {
-    playerScore: number;
-    aiScore: number;
+// The receiving screen declares what it expects (see ResultsScreen.ts):
+export interface ResultsParams {
+    stageId: string;
+    score: number;
+    stars: number;
 }
 
-export class GameOverScreen implements Screen<GameOverParams> {
-    init({ ui }: ScreenContext, params: GameOverParams): void {
-        const score = createLabel(`${params.playerScore} : ${params.aiScore}`);
+export class ResultsScreen implements Screen<ResultsParams> {
+    init({ ui }: ScreenContext, params: ResultsParams): void {
+        const score = createLabel(`${params.score}`);
         // ...
     }
 }
 ```
 
 ```ts
-// The sending screen passes it at transition time:
-void screens.start(SCREENS.GameOver, { playerScore: 5, aiScore: 3 });
+// The sending screen passes it at transition time (see PlayScreen.finish()):
+void screens.start(SCREENS.Results, { stageId: 'stage-1', score: 240, stars: 2 });
 ```
 
 Screens that don't need data simply use the default `Screen` (i.e. `Screen<void>`) and ignore
@@ -357,7 +362,7 @@ you can ship it; Pixi registers the `FontFace` for you — no CSS `@font-face` n
 
 ```ts
 this.stop = input.once((event) => {
-    void screens.start(SCREENS.Game);       // fires once, then unsubscribes
+    void screens.start(SCREENS.Play, { stageId: 'tutorial' }); // fires once, then unsubscribes
 });
 
 // or every click:
@@ -375,9 +380,9 @@ Remember to call `this.stop?.()` in the screen's `destroy()`.
 `update()` for continuous control, or subscribe for one-shot presses:
 
 ```ts
-// Continuous: move while the key is held (see PaddleKeys component).
+// Continuous: poll while the key is held.
 update(dt: number): void {
-    if (keyboard.isDown('ArrowLeft')) this.paddle.x -= 0.5 * dt;
+    if (keyboard.isDown('ArrowLeft')) sprite.x -= 0.5 * dt;
 }
 
 // One-shot: fire on each press.
@@ -389,7 +394,7 @@ manager cannot clean them up for you.
 
 ### Pause the game (ESC + overlay)
 
-The pattern used by `PongScreen`: a hidden overlay container in `ui`, ESC
+The pattern used by `PlayScreen`: a hidden overlay container in `ui`, ESC
 toggles it, and `update()` returns early while paused so gameplay freezes:
 
 ```ts
@@ -412,7 +417,8 @@ togglePause(): void {
 ```
 
 Buttons in the overlay are plain containers with `eventMode = 'static'` and a
-`pointerdown` handler — see `PongScreen.createPauseButton()`. "Exit" simply
+`pointerdown` handler — the shared `createButton()` helper in
+`core/display/Button.ts` builds both for you. "Quit to Menu" simply
 calls `screens.start(SCREENS.MainMenu)`.
 
 ### Animate something every frame

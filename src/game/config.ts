@@ -23,22 +23,30 @@ export const CLEAR_COLOR: ColorSource = 0x028af8;
 /** Palette used by the screens. */
 export const COLORS = {
     clear: 0x028af8,
-    game: 0x00ff00,
-    gameOver: 0xff0000,
     white: 0xffffff,
     black: 0x000000,
-    /** Pong playfield background. */
-    pong: 0x101828,
-    /** Pong center line + paddles. */
-    pongAccent: 0x4ade80,
+    /** Playfield ground behind the honeycomb. */
+    playfield: 0x1f6f3f,
+    /** Hole mound / rim. */
+    mound: 0x6b4a2f,
+    /** Dark hole interior. */
+    pit: 0x140d05,
+    /** Primary button and highlight. */
+    accent: 0xff7aa2,
+    /** Results backdrop. */
+    results: 0x2b1a5e,
+    /** Stars and bonus points. */
+    star: 0xffd166,
+    /** Hazards and penalties. */
+    hazard: 0xff5a5f,
 } as const;
 
 /** Unique keys used with `ScreenManager.register` and `ScreenManager.start`. */
 export const SCREENS = {
     Preloader: 'Preloader',
     MainMenu: 'MainMenu',
-    Game: 'Game',
-    GameOver: 'GameOver',
+    Play: 'Play',
+    Results: 'Results',
 } as const;
 
 /** Bundled text face. The preloader loads it before any label is created. */
