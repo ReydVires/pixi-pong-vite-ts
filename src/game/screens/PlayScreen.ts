@@ -14,7 +14,7 @@ import { CAPY_TYPES } from '../levels/capyTypes';
 import { findStage } from '../levels/stages';
 import type { CapyTypeId, StageDef, TutorialStep } from '../levels/types';
 import { ComboTracker } from '../systems/ComboTracker';
-import { ScoreKeeper, starsFor } from '../systems/ScoreKeeper';
+import { ScoreKeeper, starsFor, tapOutcome } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
 import { SessionClock } from '../systems/SessionClock';
 import type { ResultsParams } from './ResultsScreen';
@@ -261,7 +261,8 @@ export class PlayScreen implements Screen<PlayParams> {
 
         const target = this.capys.find((capy) => capy.emerge.hittable && capy.near(x, y, TAP_RADIUS_SCALE));
         if (target) {
-            this.whack(target);
+            if (target.type.harmful) this.strikeHazard(target);
+            else this.whack(target);
             return;
         }
 
@@ -298,6 +299,29 @@ export class PlayScreen implements Screen<PlayParams> {
         capy.emerge.retreat();
     }
 
+    /**
+     * A tap that lands on a hazard.
+     *
+     * The penalty is flat rather than combo-scaled, the streak breaks, and it
+     * counts against accuracy — a bad tap is still a tap. Tapping it is the
+     * mistake; letting a bomb sink away again is correct play, which is why
+     * `flushRetired` spares hazards the miss it charges everything else.
+     */
+    private strikeHazard(capy: Capy): void {
+        const { points } = tapOutcome(capy.type, this.combo.multiplier);
+
+        capy.flash();
+        capy.markSettled();
+        this.score.add(points);
+        this.combo.recordMiss();
+        this.misses += 1;
+
+        this.spawnPopup(capy, points);
+        this.updateHud();
+
+        capy.emerge.retreat();
+    }
+
     /** A clear effect resolves everything else on the field. */
     private clearField(resolved: Capy): void {
         for (const capy of [...this.capys]) {
@@ -314,7 +338,7 @@ export class PlayScreen implements Screen<PlayParams> {
     }
 
     private award(capy: Capy): void {
-        const points = capy.type.points * this.combo.multiplier;
+        const { points } = tapOutcome(capy.type, this.combo.multiplier);
 
         this.score.add(points);
         this.combo.recordHit();
@@ -348,7 +372,9 @@ export class PlayScreen implements Screen<PlayParams> {
         if (this.pendingRetirement.length === 0) return;
 
         for (const capy of this.pendingRetirement.splice(0)) {
-            if (!capy.isSettled) {
+            // A hazard letting itself out is the player playing correctly, not a
+            // miss — so it costs no accuracy and breaks no streak.
+            if (!capy.isSettled && !capy.type.harmful) {
                 this.misses += 1;
                 this.combo.recordMiss();
                 this.updateHud();

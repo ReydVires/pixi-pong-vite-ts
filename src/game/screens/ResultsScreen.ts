@@ -5,6 +5,7 @@ import { createButton } from '../core/display/button';
 import { createLabel } from '../core/display/label';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import { findNextStage, findStage } from '../levels/stages';
+import { canAdvance } from '../systems/ScoreKeeper';
 
 /** Data carried across Play → Results. */
 export interface ResultsParams {
@@ -19,6 +20,21 @@ export interface ResultsParams {
 
 const STAR_OUTER = 30;
 const STAR_INNER = 13;
+
+/**
+ * Vertical rhythm of the summary, top to bottom.
+ *
+ * The copy block sits 24px higher than it originally did: the "score to earn a
+ * star" line needs a row of its own, and at its first position it ran straight
+ * into the Replay button. Buttons are a fixed 72px tall centred on
+ * `BUTTON_START_Y`, so the first one starts at y=634 — `GOAL_Y` keeps the
+ * copy clear of that.
+ */
+const TITLE_Y = 276;
+const STARS_Y = 376;
+const SCORE_Y = 476;
+const STATS_Y = 551;
+const GOAL_Y = 601;
 const BUTTON_START_Y = 670;
 const BUTTON_STEP_Y = 96;
 
@@ -35,14 +51,14 @@ export class ResultsScreen implements Screen<ResultsParams> {
 
         const title = createLabel(`${stage.title} complete`, { fontSize: 56 });
         title.anchor.set(0.5);
-        title.position.set(SCREEN_CENTER.x, 300);
+        title.position.set(SCREEN_CENTER.x, TITLE_Y);
         ui.addChild(title);
 
         ui.addChild(this.createStars(params.stars));
 
         const score = createLabel(`${params.score}`, { fontSize: 84, fill: COLORS.star });
         score.anchor.set(0.5);
-        score.position.set(SCREEN_CENTER.x, 500);
+        score.position.set(SCREEN_CENTER.x, SCORE_Y);
         ui.addChild(score);
 
         const stats = createLabel(
@@ -50,13 +66,18 @@ export class ResultsScreen implements Screen<ResultsParams> {
             { fontSize: 26 },
         );
         stats.anchor.set(0.5);
-        stats.position.set(SCREEN_CENTER.x, 575);
+        stats.position.set(SCREEN_CENTER.x, STATS_Y);
         ui.addChild(stats);
 
+        // Earn a star to move on. Advance is the reward for engaging with the
+        // stage; coming up empty repeats it rather than dead-ending the run.
+        const advanced = canAdvance(params.stars);
+
         // The primary button is always the furthest forward: "Next" when there
-        // is another stage, otherwise straight back into the same one.
+        // is another stage *and* one was earned, otherwise straight back into
+        // the same one — which is why Replay takes the accent in that case.
         const actions: { label: string; onTap: () => void }[] = [];
-        if (next) {
+        if (next && advanced) {
             actions.push({ label: 'Next', onTap: () => void screens.start(SCREENS.Play, { stageId: next.id }) });
         }
         actions.push({ label: 'Replay', onTap: () => void screens.start(SCREENS.Play, { stageId: stage.id }) });
@@ -69,6 +90,18 @@ export class ResultsScreen implements Screen<ResultsParams> {
             button.position.set(SCREEN_CENTER.x, BUTTON_START_Y + index * BUTTON_STEP_Y);
             ui.addChild(button);
         });
+
+        // Explain the missing button, and name the target — without this the
+        // next stage just looks absent.
+        if (next && !advanced) {
+            const goal = createLabel(`Score ${stage.starThresholds[0]} to earn a star and continue`, {
+                fontSize: 24,
+                fill: COLORS.star,
+            });
+            goal.anchor.set(0.5);
+            goal.position.set(SCREEN_CENTER.x, GOAL_Y);
+            ui.addChild(goal);
+        }
     }
 
     /** A row of three stars, filled according to how well the stage went. */
@@ -81,7 +114,7 @@ export class ResultsScreen implements Screen<ResultsParams> {
             row.addChild(star);
         }
 
-        row.position.set(SCREEN_CENTER.x, 400);
+        row.position.set(SCREEN_CENTER.x, STARS_Y);
         return row;
     }
 

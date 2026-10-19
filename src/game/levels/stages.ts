@@ -15,7 +15,7 @@ export const STAGES: readonly StageDef[] = [
         // Generous: the beats need ~6 whacks, so this only catches a player
         // who has stopped playing — it is not meant to be loseable.
         durationMs: 60_000,
-        layout: 'hex',
+        layout: 'grid',
         // Four holes keep the honeycomb feel while leaving one hole per thumb
         // reachable — the full seven is too much to take in while learning.
         holes: 4,
@@ -35,7 +35,7 @@ export const STAGES: readonly StageDef[] = [
         title: 'Stage 1',
         durationMs: 30_000,
         layout: 'hex',
-        holes: 7,
+        holes: 4,
         spawn: [{ type: 'normal', weight: 1 }],
         spawnIntervalMs: [900, 1300],
         maxConcurrent: 2,
@@ -57,10 +57,33 @@ export const STAGES: readonly StageDef[] = [
         // Slightly quicker than Stage 1: the toughs sit in a hole longer, so
         // the field needs topping up to keep the same whack-per-second feel.
         spawnIntervalMs: [800, 1200],
-        maxConcurrent: 2,
+        maxConcurrent: 3,
         // Stage 1's thresholds scaled by duration (35/30s), spawn pace and
         // the 3:1 mix — the tough is worth 30 to a normal's 10.
         starThresholds: [110, 220, 360],
+    },
+    {
+        // First appearance of `bomb`: tap it and you lose 25 and your streak.
+        // The red spike over its head is the tell, and letting it sink away
+        // again is free — so the stage is only won by *not* swatting everything.
+        id: 'stage-3',
+        title: 'Stage 3',
+        durationMs: 35_000,
+        layout: 'hex',
+        holes: 7,
+        spawn: [
+            { type: 'normal', weight: 3 },
+            { type: 'tough', weight: 1 },
+            { type: 'bomb', weight: 1 },
+        ],
+        spawnIntervalMs: [800, 1200],
+        // Three at once, unlike Stage 2: a hazard only teaches anything if
+        // there is something else to hit and a reason to hurry.
+        maxConcurrent: 3,
+        // Sits above Stage 2 because it should look like progress, and stays
+        // reachable because a bomb penalty shaves the ceiling rather than
+        // moving it out of sight.
+        starThresholds: [120, 240, 380],
     },
 ];
 
