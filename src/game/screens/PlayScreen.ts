@@ -16,7 +16,7 @@ import type { CapyTypeId, StageDef, TutorialStep } from '../levels/types';
 import { ComboTracker } from '../systems/ComboTracker';
 import { ScoreKeeper, starsFor, tapOutcome } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
-import { SessionClock } from '../systems/SessionClock';
+import { SessionClock, secondsRemaining } from '../systems/SessionClock';
 import type { ResultsParams } from './ResultsScreen';
 
 /** Centre of the honeycomb in design units — leaves room for HUD and prompt. */
@@ -496,7 +496,7 @@ export class PlayScreen implements Screen<PlayParams> {
         }
 
         if (this.timerLabel && this.clock) {
-            this.timerLabel.text = `${Math.ceil(this.clock.remainingMs / 1000)}`;
+            this.timerLabel.text = `${secondsRemaining(this.clock.remainingMs)}`;
         }
     }
 

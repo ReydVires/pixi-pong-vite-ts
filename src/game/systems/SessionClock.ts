@@ -31,3 +31,15 @@ export class SessionClock {
         this.elapsed += dt * this.rate;
     }
 }
+
+/**
+ * Whole seconds to show for `remainingMs`.
+ *
+ * Deliberately `floor`, not `ceil`. Rounding up held every number on screen a
+ * second too long and only reached 0 *after* the stage had ended, so a 10s
+ * stage read 10 → 1. Flooring makes it open on 9 and count 9 → 0, so the digit
+ * the player reads is the time they actually have left.
+ */
+export function secondsRemaining(remainingMs: number): number {
+    return Math.floor(remainingMs / 1000);
+}
