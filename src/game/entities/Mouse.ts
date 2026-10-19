@@ -43,7 +43,13 @@ export class Mouse extends Entity {
         this.hitTarget = new HitTarget(type);
         this.headRadius = hole.slot.radius * 0.7;
 
-        this.flashOverlay = new Graphics().circle(0, 0, this.headRadius).fill(0xffffff);
+        // Matches the blocky head + muzzle, so a hit flash doesn't ring past it.
+        const r0 = this.headRadius;
+        this.flashOverlay = new Graphics()
+            .roundRect(-r0 * 0.95, -r0 * 0.75, r0 * 1.9, r0 * 1.3, r0 * 0.4)
+            .fill(0xffffff)
+            .roundRect(-r0 * 0.725, r0 * 0.145, r0 * 1.45, r0 * 0.75, r0 * 0.32)
+            .fill(0xffffff);
         this.flashOverlay.alpha = 0;
         this.pips = new Graphics();
 
@@ -99,12 +105,12 @@ export class Mouse extends Entity {
     /** Called by `Emerge` — moves and scales the mouse as it rises or sinks. */
     setEmergeProgress(progress: number): void {
         const radius = this.hole.slot.radius;
-        // Tuned against the hole: at 0 the whole mouse (hazard marker, chin
-        // *and* ears) tucks behind the front lip, so nothing pokes out above
-        // the rim or below the mound; at 1 the chin sits just inside the rim
-        // so it reads as standing in the hole.
-        this.position.y = radius * (0.566 - 1.066 * progress);
-        this.scale.set(0.56 + 0.44 * progress);
+        // Tuned against the hole for the blocky capybara silhouette: at 0 the
+        // whole shape (hazard marker, muzzle corners *and* ears) tucks behind
+        // the front lip; at 1 the muzzle sits just inside the rim so it reads
+        // as standing in the hole.
+        this.position.y = radius * (0.554 - 1.005 * progress);
+        this.scale.set(0.55 + 0.45 * progress);
     }
 
     override update(dt: number): void {
@@ -120,25 +126,34 @@ export class Mouse extends Entity {
         const r = this.headRadius;
         const body = new Graphics();
 
-        // Ears first — the head covers their lower halves, so they read as
-        // sitting behind it.
-        body.circle(-r * 0.6, -r * 0.8, r * 0.42).fill(this.type.color);
-        body.circle(r * 0.6, -r * 0.8, r * 0.42).fill(this.type.color);
-        body.circle(-r * 0.6, -r * 0.8, r * 0.2).fill(this.type.accent);
-        body.circle(r * 0.6, -r * 0.8, r * 0.2).fill(this.type.accent);
+        // Capybara silhouette: a blocky skull and a blunt, squared muzzle.
+        // Deliberately built from rounded rectangles — a plain circle with
+        // round ears on top reads "bear", which is what this replaces.
+        body.roundRect(-r * 0.95, -r * 0.75, r * 1.9, r * 1.3, r * 0.4).fill(this.type.color);
+        body.roundRect(-r * 0.725, r * 0.145, r * 1.45, r * 0.75, r * 0.32).fill(this.type.color);
 
-        body.circle(0, 0, r).fill(this.type.color);
-        body.circle(0, r * 0.44, r * 0.3).fill(this.type.accent);
+        // Ears: tiny nubs poking above the top corners, not discs.
+        body.circle(-r * 0.68, -r * 0.7, r * 0.16).fill(this.type.color);
+        body.circle(r * 0.68, -r * 0.7, r * 0.16).fill(this.type.color);
+        body.circle(-r * 0.68, -r * 0.7, r * 0.08).fill(this.type.accent);
+        body.circle(r * 0.68, -r * 0.7, r * 0.08).fill(this.type.accent);
 
-        body.circle(-r * 0.34, -r * 0.16, r * 0.2).fill(0xffffff);
-        body.circle(r * 0.34, -r * 0.16, r * 0.2).fill(0xffffff);
-        body.circle(-r * 0.3, -r * 0.14, r * 0.1).fill(0x1b1b1b);
-        body.circle(r * 0.3, -r * 0.14, r * 0.1).fill(0x1b1b1b);
+        // Eyes: high on the skull and wide apart, as a capybara's are.
+        body.circle(-r * 0.52, -r * 0.3, r * 0.13).fill(0xffffff);
+        body.circle(r * 0.52, -r * 0.3, r * 0.13).fill(0xffffff);
+        body.circle(-r * 0.5, -r * 0.3, r * 0.065).fill(0x1b1b1b);
+        body.circle(r * 0.5, -r * 0.3, r * 0.065).fill(0x1b1b1b);
 
-        // Hazards carry a warning marker so they can be told apart *before*
-        // they cost points.
+        // Nose: a wide oval on the muzzle, darkened from the coat so it always
+        // silhouettes — a fixed brown disappears on the dark bomb coat.
+        const nose = darken(this.type.color, 0.62);
+        body.ellipse(0, r * 0.42, r * 0.36, r * 0.26).fill(nose);
+        body.circle(-r * 0.13, r * 0.38, r * 0.05).fill(0x1b1b1b);
+        body.circle(r * 0.13, r * 0.38, r * 0.05).fill(0x1b1b1b);
+
         if (this.type.harmful) {
-            body.poly([0, -r * 1.1, r * 0.24, -r * 0.6, -r * 0.24, -r * 0.6], true).fill(COLORS.hazard);
+            // Warning marker above the skull, clear of the ears.
+            body.poly([0, -r * 1.15, r * 0.22, -r * 0.68, -r * 0.22, -r * 0.68], true).fill(COLORS.hazard);
         }
 
         return body;
@@ -159,4 +174,10 @@ export class Mouse extends Entity {
             this.pips.circle(startX + i * (size + gap), y, size / 2).fill(0xffffff);
         }
     }
+}
+
+/** Push a hex colour toward black — `amount` in [0,1]. Keeps the hue. */
+function darken(color: number, amount: number): number {
+    const channel = (shift: number): number => Math.round(((color >> shift) & 0xff) * (1 - amount));
+    return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 }

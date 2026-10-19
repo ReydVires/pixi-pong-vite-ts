@@ -1,11 +1,12 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container } from 'pixi.js';
 import type { Text } from 'pixi.js';
-import { ASSETS, COLORS, GAME_HEIGHT, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
+import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/Background';
 import { createButton } from '../core/display/Button';
 import { createLabel } from '../core/display/Label';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import { holeSlots } from '../core/layout/hexLayout';
+import type { Responsive } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/Screen';
 import { Hole } from '../entities/Hole';
 import { Mouse } from '../entities/Mouse';
@@ -117,7 +118,7 @@ export class PlayScreen implements Screen<PlayParams> {
         this.popupLayer = new Container();
         world.addChild(this.popupLayer);
 
-        this.createHud(ui);
+        this.createHud(ui, responsive);
 
         if (stage.durationMs !== null) {
             this.clock = new SessionClock(stage.durationMs);
@@ -374,7 +375,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
     // --- HUD ----------------------------------------------------------------
 
-    private createHud(ui: Container): void {
+    private createHud(ui: Container, responsive: Responsive): void {
         this.scoreLabel = createLabel('0', { fontSize: 52 });
         this.scoreLabel.anchor.set(0, 0.5);
         this.scoreLabel.position.set(56, 92);
@@ -400,15 +401,19 @@ export class PlayScreen implements Screen<PlayParams> {
         pause.position.set(GAME_WIDTH - 72, 92);
         ui.addChild(pause);
 
-        this.pauseOverlay = this.createPauseOverlay();
+        this.pauseOverlay = this.createPauseOverlay(responsive);
         this.pauseOverlay.visible = false;
         ui.addChild(this.pauseOverlay);
     }
 
-    private createPauseOverlay(): Container {
+    private createPauseOverlay(responsive: Responsive): Container {
         const overlay = new Container();
 
-        const dim = new Graphics().rect(0, 0, GAME_WIDTH, GAME_HEIGHT).fill({ color: COLORS.black, alpha: 0.65 });
+        // Full-bleed dim over the *visible* area, not the design rect — the
+        // design rect is contain-scaled, so a fixed 768x1024 dim leaves the
+        // letterbox margins (left/right in landscape, above/below in portrait)
+        // uncovered and gameplay still visible outside the overlay.
+        const dim = createColorBackground(COLORS.black, responsive, 0.65);
         dim.eventMode = 'static'; // swallow taps meant for the playfield
         overlay.addChild(dim);
 

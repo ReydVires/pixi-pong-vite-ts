@@ -3,16 +3,16 @@ import type { ColorSource, Texture } from 'pixi.js';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 
 /**
- * Full-bleed solid backdrop. Redraws to cover the whole visible world area
- * (including the letterbox margins) and cleans up its resize listener when
- * the graphics is destroyed.
+ * Full-bleed solid backdrop (or overlay). Redraws to cover the whole visible
+ * world area (including the letterbox margins) and cleans up its resize
+ * listener when the graphics is destroyed.
  */
-export function createColorBackground(color: ColorSource, responsive: Responsive): Graphics {
+export function createColorBackground(color: ColorSource, responsive: Responsive, alpha = 1): Graphics {
     const background = new Graphics();
 
     const draw = (metrics: ViewportMetrics): void => {
         const { x, y, width, height } = metrics.visibleBounds;
-        background.clear().rect(x, y, width, height).fill(color);
+        background.clear().rect(x, y, width, height).fill({ color, alpha });
     };
 
     draw(responsive.viewport);
