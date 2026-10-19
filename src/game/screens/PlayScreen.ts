@@ -280,11 +280,13 @@ export class PlayScreen implements Screen<PlayParams> {
     private whack(capy: Capy): void {
         const downed = capy.hitTarget.hit();
         capy.flash();
+        // Always redraw, not just on a wound: the finishing blow has to clear
+        // the last pip too, or a downed `tough` sinks away still showing one.
+        capy.refreshHealth();
 
         if (!downed) {
             // Still ticking: give it a grace window rather than fleeing mid-fight.
             if (capy.type.staysWhenHit) capy.emerge.retain(WOUND_GRACE_MS);
-            capy.refreshHealth();
             return;
         }
 

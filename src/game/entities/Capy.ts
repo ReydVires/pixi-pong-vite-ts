@@ -10,6 +10,15 @@ import type { Hole } from './Hole';
 const FLASH_MS = 140;
 
 /**
+ * Emerge progress below which the health pips stay hidden.
+ *
+ * The pips sit *above* the head, so the front lip cannot cover them the way it
+ * covers the body — without this gate they hover over an empty hole for the
+ * whole of a sunk capy's life (spawn and the tail of a retreat).
+ */
+const PIP_MIN_PROGRESS = 0.5;
+
+/**
  * A capy rising out of its hole.
  *
  * Position is relative to its `Hole`: `Emerge` drives it through
@@ -111,6 +120,7 @@ export class Capy extends Entity {
         // as standing in the hole.
         this.position.y = radius * (0.554 - 1.005 * progress);
         this.scale.set(0.55 + 0.45 * progress);
+        this.pips.visible = progress >= PIP_MIN_PROGRESS;
     }
 
     override update(dt: number): void {

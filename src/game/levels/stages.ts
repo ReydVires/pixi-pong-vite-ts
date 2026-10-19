@@ -41,6 +41,27 @@ export const STAGES: readonly StageDef[] = [
         maxConcurrent: 2,
         starThresholds: [60, 120, 200],
     },
+    {
+        // First appearance of `tough`: three taps, and it stays up between
+        // them. The pips above its head are the tell. Everything else is
+        // Stage 1 again — one new idea, as the table promises.
+        id: 'stage-2',
+        title: 'Stage 2',
+        durationMs: 35_000,
+        layout: 'hex',
+        holes: 7,
+        spawn: [
+            { type: 'normal', weight: 3 },
+            { type: 'tough', weight: 1 },
+        ],
+        // Slightly quicker than Stage 1: the toughs sit in a hole longer, so
+        // the field needs topping up to keep the same whack-per-second feel.
+        spawnIntervalMs: [800, 1200],
+        maxConcurrent: 2,
+        // Stage 1's thresholds scaled by duration (35/30s), spawn pace and
+        // the 3:1 mix — the tough is worth 30 to a normal's 10.
+        starThresholds: [110, 220, 360],
+    },
 ];
 
 /** Stage the menu starts with. */
