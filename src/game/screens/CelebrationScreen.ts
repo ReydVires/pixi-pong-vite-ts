@@ -1,7 +1,6 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import type { Text } from 'pixi.js';
 import { SFX } from '../audio/sfx';
-import { Burst } from '../components/Burst';
 import { CELEBRATION, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import type { AssetLoader } from '../core/assets/AssetLoader';
 import { createColorBackground } from '../core/display/background';
@@ -11,6 +10,7 @@ import { createSceneButton } from '../core/display/sceneButton';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import { drawCapyFace } from '../entities/capyFace';
 import { CAPY_TYPES } from '../levels/capyTypes';
+import { EffectsSystem } from '../systems/EffectsSystem';
 import { FIREWORK_COLORS, nextFirework } from '../systems/fireworks';
 import type { Firework } from '../systems/fireworks';
 import type { BurstOptions } from '../systems/particles';
@@ -119,9 +119,8 @@ interface GiftArt {
  */
 export class CelebrationScreen implements Screen {
     private context: ScreenContext | null = null;
-    private readonly bursts: Burst[] = [];
+    private effects: EffectsSystem | null = null;
 
-    private skyLayer: Container | null = null;
     private uiLayer: Container | null = null;
     private gift: Container | null = null;
     /** The capy living in the present, hidden until the box is opened. */
@@ -160,8 +159,9 @@ export class CelebrationScreen implements Screen {
 
         // Fireworks go in their own layer *behind* the present, so a burst can
         // never hide the thing the player is meant to tap.
-        this.skyLayer = new Container();
-        world.addChild(this.skyLayer);
+        const skyLayer = new Container();
+        world.addChild(skyLayer);
+        this.effects = new EffectsSystem(skyLayer);
 
         // A pool of light under the present: on a dark screen it is what makes
         // the box the bright object, rather than one more shape on the sky.
@@ -196,15 +196,7 @@ export class CelebrationScreen implements Screen {
             this.throwBurst(this.firework.color, this.firework.x, this.firework.y, FIREWORK_BURST);
             this.scheduleFirework();
         }
-
-        for (let i = this.bursts.length - 1; i >= 0; i--) {
-            const burst = this.bursts[i];
-            burst.update(dt);
-            if (!burst.finished) continue;
-
-            burst.destroy({ children: true });
-            this.bursts.splice(i, 1);
-        }
+        this.effects?.update(dt);
 
         this.updateGift(dt);
         this.updateRibbon(dt);
@@ -221,9 +213,9 @@ export class CelebrationScreen implements Screen {
     }
 
     destroy(): void {
-        this.bursts.length = 0;
+        this.effects?.destroy();
+        this.effects = null;
         this.context = null;
-        this.skyLayer = null;
         this.uiLayer = null;
         this.gift = null;
         this.face = null;
@@ -534,11 +526,7 @@ export class CelebrationScreen implements Screen {
     }
 
     private throwBurst(color: number, x: number, y: number, options: Omit<BurstOptions, 'x' | 'y'>): void {
-        if (!this.skyLayer) return;
-
-        const burst = new Burst(color, { ...options, x, y });
-        this.skyLayer.addChild(burst);
-        this.bursts.push(burst);
+        this.effects?.addBurst(color, { ...options, x, y });
     }
 }
 

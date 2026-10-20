@@ -1,8 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import type { Text } from 'pixi.js';
 import { SFX } from '../audio/sfx';
-import { Burst } from '../components/Burst';
-import { Shockwave } from '../components/Shockwave';
 import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { createButton } from '../core/display/button';
@@ -22,6 +20,7 @@ import { canAdvance } from '../systems/ScoreKeeper';
 import { ComboTracker } from '../systems/ComboTracker';
 import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
 import type { TapOutcome } from '../systems/ScoreKeeper';
+import { EffectsSystem } from '../systems/EffectsSystem';
 import { pickSpawn, Spawner } from '../systems/Spawner';
 import type { BurstOptions } from '../systems/particles';
 import { SessionClock, secondsRemaining } from '../systems/SessionClock';
@@ -180,8 +179,6 @@ export class PlayScreen implements Screen<PlayParams> {
     private readonly holes: Hole[] = [];
     private readonly capys: Capy[] = [];
     private readonly popups: Popup[] = [];
-    private readonly bursts: Burst[] = [];
-    private readonly shockwaves: Shockwave[] = [];
     private readonly pendingRetirement: Capy[] = [];
 
     private clock: SessionClock | null = null;
@@ -228,7 +225,7 @@ export class PlayScreen implements Screen<PlayParams> {
     }
 
     private popupLayer: Container | null = null;
-    private fxLayer: Container | null = null;
+    private effects: EffectsSystem | null = null;
     /** Everything the playfield is made of, so a milestone can kick all of it. */
     private field: Container | null = null;
     private sweepFlash: Graphics | null = null;
@@ -295,8 +292,9 @@ export class PlayScreen implements Screen<PlayParams> {
         // Effects sit above the holes — a whack's sparks should cover the mound
         // they came out of — but below the popups, so a floating score is never
         // buried under its own explosion.
-        this.fxLayer = new Container();
-        this.field.addChild(this.fxLayer);
+        const fxLayer = new Container();
+        this.field.addChild(fxLayer);
+        this.effects = new EffectsSystem(fxLayer);
 
         // Added last on purpose: score popups float above the mound they rise
         // from. Adding this layer before the holes tucks every "+10" behind
@@ -366,8 +364,8 @@ export class PlayScreen implements Screen<PlayParams> {
 
         for (const popup of this.popups) popup.label.destroy();
         this.popups.length = 0;
-        this.bursts.length = 0;
-        this.shockwaves.length = 0;
+        this.effects?.destroy();
+        this.effects = null;
         this.pendingRetirement.length = 0;
         this.capys.length = 0;
         this.holes.length = 0;
@@ -377,7 +375,6 @@ export class PlayScreen implements Screen<PlayParams> {
         this.clock = null;
         this.spawner = null;
         this.popupLayer = null;
-        this.fxLayer = null;
         this.field = null;
         this.sweepFlash = null;
         this.sweepFlashLeft = 0;
@@ -561,7 +558,14 @@ export class PlayScreen implements Screen<PlayParams> {
         // the tapped payout and the bounties never share a line.
         const { x, y } = resolved.hole.slot;
         this.context?.audio.play(SFX.clear);
-        this.addShockwave(x, y);
+        this.effects?.addShockwave({
+            x,
+            y,
+            fromRadius: HOLE_RADIUS,
+            toRadius: HOLE_SPACING * 1.7,
+            ms: SWEEP_RING_MS,
+            color: COLORS.star,
+        });
         this.spray(resolved, SWEEP_BURST);
         this.sweepFlashLeft = SWEEP_FLASH_MS;
         this.addPopup('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
@@ -1099,27 +1103,11 @@ export class PlayScreen implements Screen<PlayParams> {
      * the same slot, so the sparks and the popup never disagree.
      */
     private spray(capy: Capy, options: Omit<BurstOptions, 'x' | 'y'>, color: number = capy.type.color): void {
-        if (!this.fxLayer) return;
-
-        const burst = new Burst(color, { ...options, x: capy.hole.slot.x, y: capy.hole.slot.y });
-        this.fxLayer.addChild(burst);
-        this.bursts.push(burst);
-    }
-
-    /** The ring a clear leaves behind, reaching out across the whole honeycomb. */
-    private addShockwave(x: number, y: number): void {
-        if (!this.fxLayer) return;
-
-        const wave = new Shockwave({
-            x,
-            y,
-            fromRadius: HOLE_RADIUS,
-            toRadius: HOLE_SPACING * 1.7,
-            ms: SWEEP_RING_MS,
-            color: COLORS.star,
+        this.effects?.addBurst(color, {
+            ...options,
+            x: capy.hole.slot.x,
+            y: capy.hole.slot.y,
         });
-        this.fxLayer.addChild(wave);
-        this.shockwaves.push(wave);
     }
 
     private spawnPopup(capy: Capy, points: number, drop = 0): void {
@@ -1227,23 +1215,7 @@ export class PlayScreen implements Screen<PlayParams> {
      * gone.
      */
     private updateEffects(dt: number): void {
-        for (let i = this.bursts.length - 1; i >= 0; i--) {
-            const burst = this.bursts[i];
-            burst.update(dt);
-            if (!burst.finished) continue;
-
-            burst.destroy({ children: true });
-            this.bursts.splice(i, 1);
-        }
-
-        for (let i = this.shockwaves.length - 1; i >= 0; i--) {
-            const wave = this.shockwaves[i];
-            wave.update(dt);
-            if (!wave.finished) continue;
-
-            wave.destroy({ children: true });
-            this.shockwaves.splice(i, 1);
-        }
+        this.effects?.update(dt);
 
         if (this.sweepFlashLeft > 0) {
             this.sweepFlashLeft = Math.max(0, this.sweepFlashLeft - dt);

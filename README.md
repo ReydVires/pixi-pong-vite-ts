@@ -79,7 +79,7 @@ move between them.
 The game follows a **composition + data-driven** design:
 
 - **Screens** own the lifecycle and orchestration for a given UI/game state (Preloader, MainMenu, Play, Celebration, Letter)
-- **Systems** contain pure game rules (timing, scoring, combos, spawning) with no Pixi dependencies — easy to reason about and test
+- **Systems** hold reusable logic: pure rules (timing, scoring, combos, spawning) plus focused runtime services such as tweens and Pixi effect lifecycles
 - **Entities + Components** compose display objects with behaviours (`Hole`, `Capy`, `Emerge`, `HitTarget`, `Spin`, etc.)
 - **Core plumbing** is reusable engine code (screens, input, assets, audio, display, responsive, layout)
 - **Data** (`levels/`, `config.ts`, `audio/sfx.ts`) drives content; code drives behaviour
@@ -129,7 +129,7 @@ src/
     │   └── entities/           Entity + Component — composable per-frame behaviors
     ├── audio/                  sfx — every sound the game makes, by name (data only)
     ├── levels/                 What spawns: capy archetypes + the stage table (data only)
-    ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner, TweenSystem
+    ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner, TweenSystem, EffectsSystem
     ├── components/             Gameplay components (Emerge, HitTarget, Spin, Pulse)
     ├── entities/               Display objects built from components: Hole, Capy, capyFace
     └── screens/                The actual game screens  ← most of your work happens here
