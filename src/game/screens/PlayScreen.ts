@@ -55,8 +55,11 @@ const MISS_CLOCK_STEP = 0.025;
 const POPUP_MS = 700;
 /** Y of the HUD's top row — score, countdown and the pause button share it. */
 const HUD_ROW_Y = 92;
+/** Radius and stroke for the countdown ring around the timer. */
+const TIMER_RING_RADIUS = 56;
+const TIMER_RING_WIDTH = 5;
 /** The combo line hangs directly under the countdown, not off to one side. */
-const COMBO_Y = 150;
+const COMBO_Y = 180;
 /** How long the combo label stays punched after the multiplier steps up, in ms. */
 const COMBO_PUNCH_MS = 260;
 /** Extra scale at the start of that punch. */
@@ -248,6 +251,7 @@ export class PlayScreen implements Screen<PlayParams> {
     private readonly tweens = new TweenSystem();
     private comboLabel: Text | null = null;
     private timerLabel: Text | null = null;
+    private timerRing: Graphics | null = null;
     private promptLabel: Text | null = null;
     private pauseOverlay: Container | null = null;
     /**
@@ -309,6 +313,7 @@ export class PlayScreen implements Screen<PlayParams> {
                 maxConcurrent: stage.maxConcurrent,
             });
             this.timerLabel!.visible = true;
+            this.timerRing!.visible = true;
         }
 
         // A stage can be timed *and* scripted — the tutorial is both.
@@ -387,6 +392,7 @@ export class PlayScreen implements Screen<PlayParams> {
         this.tweens.clear();
         this.comboLabel = null;
         this.timerLabel = null;
+        this.timerRing = null;
         this.promptLabel = null;
         this.pauseOverlay = null;
         // Back to a clean slate, through `enter()` like every other change, so a
@@ -873,6 +879,11 @@ export class PlayScreen implements Screen<PlayParams> {
         this.targetScore = 0;
         this.tweens.clear();
 
+        this.timerRing = new Graphics();
+        this.timerRing.position.set(SCREEN_CENTER.x, rowY);
+        this.timerRing.visible = false;
+        ui.addChild(this.timerRing);
+
         this.timerLabel = createLabel('0', { fontSize: 52 });
         this.timerLabel.anchor.set(0.5, 0.5);
         this.timerLabel.position.set(SCREEN_CENTER.x, rowY);
@@ -1016,6 +1027,36 @@ export class PlayScreen implements Screen<PlayParams> {
 
         if (this.timerLabel && this.clock) {
             this.timerLabel.text = `${secondsRemaining(this.clock.remainingMs)}`;
+            this.drawTimerRing();
+        }
+    }
+
+    /** Draw remaining time as a shrinking arc behind the countdown label. */
+    private drawTimerRing(): void {
+        const ring = this.timerRing;
+        const clock = this.clock;
+        if (!ring || !clock) return;
+
+        const fraction = Math.max(0, Math.min(1, clock.remainingMs / clock.durationMs));
+        const start = -Math.PI / 2;
+
+        ring.clear();
+        ring.circle(0, 0, TIMER_RING_RADIUS).stroke({
+            width: TIMER_RING_WIDTH,
+            color: 0x3a3f4b,
+            alpha: 0.9,
+        });
+
+        if (fraction > 0) {
+            const startX = Math.cos(start) * TIMER_RING_RADIUS;
+            const startY = Math.sin(start) * TIMER_RING_RADIUS;
+            ring.moveTo(startX, startY)
+                .arc(0, 0, TIMER_RING_RADIUS, start, start + Math.PI * 2 * fraction)
+                .stroke({
+                    width: TIMER_RING_WIDTH,
+                    color: COLORS.accent,
+                    cap: 'round',
+                });
         }
     }
 
