@@ -3,6 +3,7 @@ import { COLORS, SCREEN_CENTER } from '../../config';
 import { createColorBackground } from './background';
 import { createButton } from './button';
 import { createLabel } from './label';
+import type { Text } from 'pixi.js';
 import type { ButtonOptions } from './button';
 import type { Responsive } from '../responsive/Responsive';
 
@@ -54,10 +55,14 @@ export interface OverlayOptions {
      * a detail line. Sits between the figure and the lines.
      */
     readonly hero?: string;
+    /** Called after the hero label is created and positioned. */
+    readonly onHeroCreated?: (hero: Text) => void;
     /** Lines of detail under the title, e.g. "Score 420". */
     readonly lines?: readonly string[];
     /** Buttons, top to bottom. The first is treated as the primary action. */
     readonly actions: readonly OverlayAction[];
+    /** Called after each action button is created and positioned. */
+    readonly onButtonCreated?: (button: Container, index: number) => void;
     /** Dim strength over the frozen screen behind. @default 0.72 */
     readonly dim?: number;
     /**
@@ -120,6 +125,7 @@ export function createOverlay(responsive: Responsive, options: OverlayOptions): 
         hero.anchor.set(0.5);
         hero.position.set(SCREEN_CENTER.x, y);
         body.addChild(hero);
+        options.onHeroCreated?.(hero);
         y += HERO_FONT_SIZE / 2 + HERO_GAP_BELOW;
     }
 
@@ -143,6 +149,7 @@ export function createOverlay(responsive: Responsive, options: OverlayOptions): 
         }, buttonOptions);
         button.position.set(SCREEN_CENTER.x, buttonY);
         body.addChild(button);
+        options.onButtonCreated?.(button, index);
         buttonY += BUTTON_STEP_Y;
     });
 

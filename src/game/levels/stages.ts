@@ -25,9 +25,9 @@ export const STAGES: readonly StageDef[] = [
         starThresholds: [10, 40, 100],
         tutorial: [
             { prompt: 'Tap the capy!', quota: 1, concurrent: 1, intervalMs: 0, hold: true },
-            { prompt: 'Nice! Now get the rest', quota: 3, concurrent: 1, intervalMs: 700, hold: true },
-            { prompt: "They escape if you're slow", quota: 2, concurrent: 2, intervalMs: 900 },
-            { prompt: "That's it — go!", durationMs: 10_000, concurrent: 2, intervalMs: 700 },
+            { prompt: 'Nice! Now get the rest', quota: 3, concurrent: 1, intervalMs: 1100, hold: true },
+            { prompt: "They escape if you're slow", quota: 2, concurrent: 2, intervalMs: 1300 },
+            { prompt: "That's it — go!", durationMs: 10_000, concurrent: 2, intervalMs: 1400 },
         ],
     },
     {

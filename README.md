@@ -556,7 +556,8 @@ See also **[Modals that aren't screens](#modals-that-arent-screens)** below.
 PixiJS provides the ticker, but not a general-purpose tween API. The reusable
 `TweenSystem` uses the screen's `dt` from that ticker to interpolate numeric
 values with an easing function. Retargeting the same key replaces the active
-tween; call `clear()` when the owning screen is destroyed.
+tween; use `delayMs` to stagger animations, and call `clear()` when the owning
+screen is destroyed.
 
 ```ts
 import { Easing, TweenSystem } from '../systems/TweenSystem';

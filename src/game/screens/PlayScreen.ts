@@ -325,7 +325,12 @@ export class PlayScreen implements Screen<PlayParams> {
 
     update(dt: number): void {
         const stage = this.stage;
-        if (!stage || this.mode !== 'playing') return;
+        if (!stage) return;
+        if (this.mode === 'finished') {
+            this.tweens.update(dt);
+            return;
+        }
+        if (this.mode !== 'playing') return;
 
         if (this.clock) {
             this.clock.update(dt);
@@ -705,6 +710,7 @@ export class PlayScreen implements Screen<PlayParams> {
         const stage = this.stage;
         if (!stage || this.mode === 'finished') return;
         this.enter('finished');
+        if (this.scoreLabel) this.scoreLabel.visible = false;
 
         const attempts = this.hits + this.misses;
         const accuracy = attempts > 0 ? this.hits / attempts : 0;
@@ -747,13 +753,81 @@ export class PlayScreen implements Screen<PlayParams> {
             figure: this.createStars(stars),
             // The score is the headline, not a detail line: it gets the hero
             // slot so it reads at a glance the moment the stage ends.
-            hero: `${this.scoreKeeper.score}`,
+            hero: '0',
+            onHeroCreated: (hero) => this.animateResultScore(hero, this.scoreKeeper.score),
             lines,
             actions,
             onAction: () => this.context?.audio.play(SFX.tap),
+            onButtonCreated: (button, index) => this.animateResultButton(button, index),
         });
 
         this.hudLayer?.addChild(overlay);
+    }
+
+    /** Count the final score into the results headline with a short pop. */
+    private animateResultScore(hero: Text, score: number): void {
+        hero.alpha = 0;
+        hero.scale.set(0.78);
+
+        this.tweens.to('result-score', 0, score, {
+            durationMs: Math.min(1100, 650 + score * 0.2),
+            delayMs: 120,
+            easing: Easing.easeOutCubic,
+            onUpdate: (value, progress) => {
+                hero.text = `${Math.round(value)}`;
+                hero.alpha = Math.min(1, progress * 2.5);
+                const pulse = Math.sin(progress * Math.PI) * 0.1;
+                hero.scale.set(0.78 + progress * 0.22 + pulse);
+            },
+            onComplete: () => {
+                hero.text = `${score}`;
+                hero.alpha = 1;
+                hero.scale.set(1);
+            },
+        });
+    }
+
+    /** Slide and pop each result action into view, one after another. */
+    private animateResultButton(button: Container, index: number): void {
+        const targetY = button.y;
+        const targetScale = 1;
+        const startScale = 0.82;
+        const delayMs = 360 + index * 110;
+
+        button.y = targetY + 26;
+        button.alpha = 0;
+        button.scale.set(startScale);
+        button.eventMode = 'none';
+        button.cursor = 'default';
+
+        this.tweens.to(`result-button-${index}-y`, button.y, targetY, {
+            durationMs: 420,
+            delayMs,
+            easing: Easing.easeOutBack,
+            onUpdate: (value) => {
+                button.y = value;
+            },
+        });
+        this.tweens.to(`result-button-${index}-alpha`, 0, 1, {
+            durationMs: 260,
+            delayMs,
+            easing: Easing.easeOutCubic,
+            onUpdate: (value) => {
+                button.alpha = value;
+            },
+        });
+        this.tweens.to(`result-button-${index}-scale`, startScale, targetScale, {
+            durationMs: 420,
+            delayMs,
+            easing: Easing.easeOutBack,
+            onUpdate: (value) => {
+                button.scale.set(value);
+            },
+            onComplete: () => {
+                button.eventMode = 'static';
+                button.cursor = 'pointer';
+            },
+        });
     }
 
     /** A row of three stars, filled according to how well the stage went. */
