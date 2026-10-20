@@ -141,6 +141,19 @@ interface Popup {
 }
 
 /**
+ * What the screen is doing right now.
+ *
+ * Three modes, and exactly one is ever held: the screen stores a single
+ * `PlayMode`, not a `paused`/`finished` pair. With two booleans the combination
+ * "paused *and* finished" is representable and every reader has to know which
+ * one wins; one slot rules it out entirely.
+ *
+ * `playing` is the only mode in which the run is live: it is the only one the
+ * clock, the spawner and taps move.
+ */
+export type PlayMode = 'playing' | 'paused' | 'finished';
+
+/**
  * Runs one stage.
  *
  * The stage itself is data (`StageDef`); this screen owns the things data
@@ -178,8 +191,33 @@ export class PlayScreen implements Screen<PlayParams> {
     private stepElapsed = 0;
     private stepCooldown = 0;
 
-    private finished = false;
-    private paused = false;
+    /**
+     * The screen's current mode, as a single stored value.
+     *
+     * Deliberately one field rather than a `paused`/`finished` pair: with two
+     * booleans the combination `paused && finished` is representable, and every
+     * reader has to know which one wins. One slot makes that combination
+     * impossible to hold, not merely impossible to observe.
+     *
+     * Read it freely; never write it. `enter()` is the only way in.
+     */
+    private state: PlayMode = 'playing';
+
+    /** The screen's current mode. */
+    get mode(): PlayMode {
+        return this.state;
+    }
+
+    /**
+     * The one place a transition happens.
+     *
+     * Keeping it here means the legal moves are readable in a single spot, and
+     * a mode can never be set from two places that disagree — which is how the
+     * ESC-over-results bug arose when `paused` and `finished` moved apart.
+     */
+    private enter(next: PlayMode): void {
+        this.state = next;
+    }
 
     private popupLayer: Container | null = null;
     private fxLayer: Container | null = null;
@@ -277,7 +315,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
     update(dt: number): void {
         const stage = this.stage;
-        if (!stage || this.paused || this.finished) return;
+        if (!stage || this.mode !== 'playing') return;
 
         if (this.clock) {
             this.clock.update(dt);
@@ -292,7 +330,7 @@ export class PlayScreen implements Screen<PlayParams> {
         else this.updateRandomStage(dt, stage);
 
         // A transition may have started above — don't touch torn-down state.
-        if (this.finished) return;
+        if (this.mode !== 'playing') return;
 
         for (const capy of this.capys) capy.update(dt);
         this.flushRetired();
@@ -333,6 +371,9 @@ export class PlayScreen implements Screen<PlayParams> {
         this.timerLabel = null;
         this.promptLabel = null;
         this.pauseOverlay = null;
+        // Back to a clean slate, through `enter()` like every other change, so a
+        // reused instance could never start life mid-stage.
+        this.enter('playing');
     }
 
     // --- Random stages ------------------------------------------------------
@@ -397,7 +438,7 @@ export class PlayScreen implements Screen<PlayParams> {
     // --- Taps ----------------------------------------------------------------
 
     private handleTap(x: number, y: number): void {
-        if (this.paused || this.finished) return;
+        if (this.mode !== 'playing') return;
 
         const target = this.capys.find((capy) => capy.emerge.hittable && capy.near(x, y, TAP_RADIUS_SCALE));
         if (target) {
@@ -448,7 +489,7 @@ export class PlayScreen implements Screen<PlayParams> {
         }
 
         capy.markSettled();
-        this.apply(capy, tapOutcome(capy.type, this.combo.multiplier));
+        this.bookOutcome(capy, tapOutcome(capy.type, this.combo.multiplier));
 
         // The whole point of a `golden`: it takes the rest of the field with it.
         if (capy.type.effect === 'clear') this.clearField(capy);
@@ -469,7 +510,7 @@ export class PlayScreen implements Screen<PlayParams> {
         capy.flash();
         capy.markSettled();
         this.spray(capy, SOFT_BURST, COLORS.hazard);
-        this.apply(capy, tapOutcome(capy.type, this.combo.multiplier));
+        this.bookOutcome(capy, tapOutcome(capy.type, this.combo.multiplier));
         capy.emerge.retreat();
     }
 
@@ -517,13 +558,13 @@ export class PlayScreen implements Screen<PlayParams> {
     }
 
     /**
-     * Apply one resolved interaction — the single place points, streak, the
+     * Book one resolved interaction — the single place points, streak, the
      * tally and the popup all move together.
      *
      * A non-scoring outcome can only come from deliberately tapping a hazard,
      * so it counts against accuracy and breaks the streak.
      */
-    private apply(capy: Capy, outcome: TapOutcome): void {
+    private bookOutcome(capy: Capy, outcome: TapOutcome): void {
         if (outcome.hit) {
             const before = this.combo.multiplier;
             this.combo.recordHit();
@@ -649,8 +690,8 @@ export class PlayScreen implements Screen<PlayParams> {
      */
     private finish(): void {
         const stage = this.stage;
-        if (!stage || this.finished) return;
-        this.finished = true;
+        if (!stage || this.mode === 'finished') return;
+        this.enter('finished');
 
         const attempts = this.hits + this.misses;
         const accuracy = attempts > 0 ? this.hits / attempts : 0;
@@ -793,9 +834,10 @@ export class PlayScreen implements Screen<PlayParams> {
                 {
                     label: 'Quit to Menu',
                     onTap: () => {
-                        // Leave paused state behind: the screen is about to be
-                        // torn down, and a stale `true` would pause the next one.
-                        this.paused = false;
+                        // Resume before leaving, so the pause overlay is hidden
+                        // if this screen is ever reused rather than rebuilt.
+                        this.enter('playing');
+                        if (this.pauseOverlay) this.pauseOverlay.visible = false;
                         void this.context?.screens.start(SCREENS.MainMenu);
                     },
                 },
@@ -815,19 +857,19 @@ export class PlayScreen implements Screen<PlayParams> {
     /**
      * Pause or resume the run.
      *
-     * Refuses once the stage is over: the results panel is already up, so there
-     * is no run left to freeze and a pause overlay behind it would be stranded
-     * state — ESC would leave the player looking at two modals, and the pause
-     * button would reopen a menu the run has left behind.
+     * Only meaningful while `playing` or `paused`: a finished stage has no run
+     * left to freeze, and pausing it would leave two modals on screen — the
+     * `finished` mode makes that transition impossible to request at all.
      */
     private togglePause(): void {
-        if (this.finished) return;
+        if (this.mode === 'finished') return;
 
-        this.paused = !this.paused;
+        const next = this.mode === 'playing' ? 'paused' : 'playing';
+        this.enter(next);
         // One click covers pause, resume and the ESC key, which are the same
         // action as far as the player is concerned.
         this.context?.audio.play(SFX.tap);
-        if (this.pauseOverlay) this.pauseOverlay.visible = this.paused;
+        if (this.pauseOverlay) this.pauseOverlay.visible = next === 'paused';
     }
 
     private updateHud(): void {

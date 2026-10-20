@@ -42,7 +42,7 @@ export function canAdvance(stars: number): boolean {
     return stars >= STARS_TO_ADVANCE;
 }
 
-/** What a single tap is worth, before anything is applied. */
+/** What a single tap is worth, before it is booked. */
 export interface TapOutcome {
     /** Points to add to the score — negative for hazards. */
     points: number;
