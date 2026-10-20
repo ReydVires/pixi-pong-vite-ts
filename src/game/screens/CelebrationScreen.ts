@@ -1,11 +1,13 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import type { Text } from 'pixi.js';
+import { SFX } from '../audio/sfx';
 import { Burst } from '../components/Burst';
 import { CELEBRATION, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import type { AssetLoader } from '../core/assets/AssetLoader';
 import { createColorBackground } from '../core/display/background';
 import { createImage } from '../core/display/image';
 import { createLabel } from '../core/display/label';
+import { createSceneButton } from '../core/display/sceneButton';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import { drawCapyFace } from '../entities/capyFace';
 import { CAPY_TYPES } from '../levels/capyTypes';
@@ -182,7 +184,10 @@ export class CelebrationScreen implements Screen {
 
         // The way out is always on screen: the surprise should never be a trap
         // for someone who does not realise the box is the thing to touch.
-        const menu = createSceneButton('Menu', () => void screens.start(SCREENS.MainMenu));
+        const menu = createSceneButton('Menu', () => {
+            this.context?.audio.play(SFX.tap);
+            void screens.start(SCREENS.MainMenu);
+        });
         menu.position.set(SCREEN_CENTER.x, MENU_Y);
         ui.addChild(menu);
 
@@ -250,6 +255,9 @@ export class CelebrationScreen implements Screen {
         this.opened = true;
         this.giftPunch = GIFT_PUNCH_MS;
         this.untieLeft = this.ribbon ? UNTIE_MS : 0;
+        // The flourish lands with the punch, not after it — the whole point of
+        // the reveal is that everything happens on this one tap.
+        this.context?.audio.play(SFX.win);
 
         if (this.hint) this.hint.visible = false;
         if (this.wish) this.wish.visible = true;
@@ -502,11 +510,13 @@ export class CelebrationScreen implements Screen {
         message.position.set(SCREEN_CENTER.x, LOWER_TEXT_Y);
         wish.addChild(message);
 
-        // The letter is the point of the whole screen, and there is no letter
-        // yet: this is the placeholder, styled as the payoff but wired to
-        // nothing (`null`), so it is a signpost rather than a button that lies.
-        // `Menu`, always on screen, is still the way out.
-        const letter = createSceneButton('Read the letter', null, true);
+        // The letter was the promise the present made; the button now keeps it.
+        // Still the accent: the payoff is reading it, and `Menu` is still on
+        // screen for anyone who would rather not.
+        const letter = createSceneButton('Read the letter', () => {
+            this.context?.audio.play(SFX.tap);
+            void this.context?.screens.start(SCREENS.Letter);
+        }, true);
         letter.position.set(SCREEN_CENTER.x, PRIMARY_Y);
         wish.addChild(letter);
 
@@ -552,46 +562,4 @@ function easeOutBack(t: number, overshoot = 1.70158): number {
     const p = t - 1;
 
     return 1 + (overshoot + 1) * p * p * p + overshoot * p * p;
-}
-
-/** Size of the celebration's buttons, in design px. */
-const SCENE_BUTTON = { width: 320, height: 68 } as const;
-
-/**
- * A button that belongs to the night sky: a soft rounded plaque rather than the
- * arcade slab the rest of the game uses.
- *
- * `accent` marks the payoff — gold with dark text, picking up the ribbon and the
- * fireworks. The plain variant is a dim pane with a cool outline, so the way out
- * is always there without competing with the present for attention.
- *
- * Pass `null` for `onTap` to stage a button that is not wired up yet: it keeps
- * its place and its looks, but takes no taps rather than silently swallowing
- * them, so a placeholder can never be mistaken for a broken control.
- */
-function createSceneButton(text: string, onTap: (() => void) | null, accent = false): Container {
-    const { width, height } = SCENE_BUTTON;
-    const button = new Container();
-
-    const plaque = new Graphics()
-        .roundRect(-width / 2, -height / 2, width, height, height / 2)
-        .fill({ color: accent ? COLORS.star : COLORS.sky, alpha: accent ? 0.9 : 0.55 })
-        .stroke({ width: 2, color: accent ? COLORS.star : 0x5c6a9c, alpha: 0.95 });
-
-    const label = createLabel(text, {
-        fontSize: 28,
-        fill: accent ? COLORS.sky : COLORS.white,
-        stroke: accent ? null : { color: COLORS.sky, width: 3 },
-    });
-    label.anchor.set(0.5);
-
-    button.addChild(plaque, label);
-
-    if (onTap) {
-        button.eventMode = 'static';
-        button.cursor = 'pointer';
-        button.on('pointerdown', onTap);
-    }
-
-    return button;
 }

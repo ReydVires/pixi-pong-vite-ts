@@ -1,4 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
+import { SFX } from '../audio/sfx';
 import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { createButton } from '../core/display/button';
@@ -40,7 +41,7 @@ const BUTTON_STEP_Y = 96;
 /** Post-stage summary: stars, score, accuracy, best combo, and what's next. */
 export class ResultsScreen implements Screen<ResultsParams> {
     init(context: ScreenContext, params: ResultsParams): void {
-        const { world, ui, assets, responsive, screens } = context;
+        const { world, ui, assets, responsive, screens, audio } = context;
 
         world.addChild(createColorBackground(COLORS.results, responsive));
         world.addChild(createTextureBackground(assets.texture(ASSETS.background), responsive, 0.3));
@@ -95,7 +96,12 @@ export class ResultsScreen implements Screen<ResultsParams> {
         actions.push({ label: 'Menu', onTap: () => void screens.start(SCREENS.MainMenu) });
 
         actions.forEach((action, index) => {
-            const button = createButton(action.label, action.onTap, {
+            // Wrapped here, once, rather than in every action: whatever the
+            // button does, it clicks first.
+            const button = createButton(action.label, () => {
+                audio.play(SFX.tap);
+                action.onTap();
+            }, {
                 fill: index === 0 ? COLORS.accent : 0x3a3f4b,
             });
             button.position.set(SCREEN_CENTER.x, BUTTON_START_Y + index * BUTTON_STEP_Y);

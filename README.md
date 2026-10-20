@@ -3,7 +3,7 @@
 A small, batteries-included starter for 2D games built with **[PixiJS 8](https://pixijs.com)**,
 **[TypeScript 5.7](https://www.typescriptlang.org)** and **[Vite 6](https://vitejs.dev)**.
 It gives you the boring-but-important parts already wired up — screen transitions, asset
-loading, pointer input, and responsive scaling — so you can focus on making the game.
+loading, sound, pointer input, and responsive scaling — so you can focus on making the game.
 
 > Never touched a game engine before? Read **[Your first 30 minutes](#your-first-30-minutes)**,
 > then the **[Cookbook](#cookbook-common-tasks)**. You'll be dangerous in no time.
@@ -14,6 +14,8 @@ loading, pointer input, and responsive scaling — so you can focus on making th
 - 🖥️ **Responsive scaling** that works on phones, tablets and desktop with no extra effort
 - 🎨 **Two layers** per screen: `world` (gameplay/backdrops) and `ui` (HUD/menus)
 - 📦 **Asset loader** with progress reporting (perfect for a loading bar)
+- 🔊 **Sound with no files to ship** — a Web Audio manager with synthesised effects,
+  volume/mute that persist, and a ready-made toggle
 - 🔤 **Bundled web font** (Titan One) loaded before any text, so labels look identical everywhere
 - 👆 **Pointer input** scoped to a screen, cleaned up automatically
 - ⌨️ **Keyboard input** scoped to a screen (`isDown` polling + `onKeyDown` events)
@@ -52,7 +54,7 @@ If you're new, do these in order:
 
 1. **Run it.** `npm install` then `npm run dev`.
 2. **Find the gameplay code.** Open `src/game/screens/PlayScreen.ts` — this is "the game"
-   (Whack-a-Mouse: mice pop out of a honeycomb of holes, tap them before they duck back).
+   (Whack-a-Capy: capys pop out of a honeycomb of holes, tap them before they duck back).
    Change the prompt text in `src/game/levels/stages.ts`, save, and watch it update live.
 3. **Understand the flow.** The game boots in `src/main.ts` → `Game.ts` → the `Preloader`
    screen → `MainMenu` → `Play` → `Results`. Tap anywhere to advance between them.
@@ -69,6 +71,7 @@ index.html .................... paints the loading splash instantly (no JS requi
          └── Game.ts ........... composition root (ships as its own async chunk):
                ├── Application ... the Pixi renderer + ticker
                ├── AssetLoader ... loads and caches textures + web fonts
+               ├── AudioManager .. synthesised sound, volume + mute (no files)
                ├── Responsive .... fits the canvas to the screen, world/ui layers
                └── ScreenManager . owns the active screen and transitions
                      └── Preloader → MainMenu → Play → Results
@@ -110,25 +113,29 @@ src/
 ├── main.ts                     Entry point — mounts the game on DOMContentLoaded
 └── game/
     ├── Game.ts                 Composition root: creates the app + services, starts first screen
-    ├── config.ts               Resolution, colors, screen keys, asset registry, breakpoints
+    ├── config.ts               Resolution, colors, screen keys, asset + audio settings, stages
     ├── core/                   Reusable engine plumbing (you rarely edit this)
     │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
     │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
-    │   ├── display/            Building blocks: Background, Button, Image, Label, ProgressBar
+    │   ├── audio/              AudioManager + synth — sound, with no files to ship
+    │   ├── display/            Building blocks: Background, Button, SceneButton, Image, Label, ProgressBar, SoundToggle
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
     │   └── entities/           Entity + Component — composable per-frame behaviors
-    ├── levels/                 What spawns: mouse archetypes + the stage table (data only)
+    ├── audio/                  sfx — every sound the game makes, by name (data only)
+    ├── levels/                 What spawns: capy archetypes + the stage table (data only)
     ├── systems/                Pure rules: SessionClock, ScoreKeeper, ComboTracker, Spawner
     ├── components/             Gameplay components (Emerge, HitTarget, Spin, Pulse)
-    ├── entities/               Display objects built from components: Hole, Mouse
+    ├── entities/               Display objects built from components: Hole, Capy, capyFace
     └── screens/                The actual game screens  ← most of your work happens here
         ├── index.ts            Registers every screen with the ScreenManager
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
-        ├── MainMenuScreen.ts   Title screen (entity + Spin component demo)
-        ├── PlayScreen.ts       The game itself — runs one stage (Whack-a-Mouse)
-        └── ResultsScreen.ts    Post-stage summary: stars, score, Replay / Next / Menu
+        ├── MainMenuScreen.ts   Title screen (entity + Spin component demo + sound toggle)
+        ├── PlayScreen.ts       The game itself — runs one stage (Whack-a-Capy)
+        ├── ResultsScreen.ts    Post-stage summary: stars, score, Replay / Next / Menu
+        ├── CelebrationScreen.ts  The finale: a present to open
+        └── LetterScreen.ts     The letter the present promised
 ```
 
 Public files served as-is live in `public/` (e.g. `public/assets/bg.png`). The HTML shell is
@@ -136,7 +143,7 @@ Public files served as-is live in `public/` (e.g. `public/assets/bg.png`). The H
 
 ## Core concepts
 
-The template uses **composition** rather than deep class hierarchies. There are only four
+The template uses **composition** rather than deep class hierarchies. There are only five
 ideas you really need.
 
 ### 1. Screens
@@ -160,6 +167,7 @@ The `ScreenContext` passed to `init()` is your toolbox:
 | `world`       | Container for gameplay/backdrops (may extend past the design area)    |
 | `ui`          | Container for HUD/menus, drawn above `world`                          |
 | `assets`      | Load assets with progress: `await assets.load(ASSETS.logo)`, `await assets.loadFont(FONTS.display)` |
+| `audio`       | Sound: `audio.play(SFX.tap)`, plus volume/mute (persisted) and `audio.load(...)` for files |
 | `input`       | Pointer events scoped to this screen: `input.once(...)` / `input.on(...)` |
 | `keyboard`    | Keyboard scoped to this screen: `keyboard.isDown('ArrowLeft')`, `keyboard.onKeyDown('Escape', cb)` |
 | `screens`     | Navigate: `screens.start(SCREENS.Play, { stageId })`                   |
@@ -252,7 +260,43 @@ A `Component` is any object with `update?(dt)` and/or `destroy?()` — see
 - `SCREENS` — string keys for every screen (used by `screens.start(...)`)
 - `ASSETS` — the texture registry (alias → path)
 - `FONTS` — the web-font registry (alias → file + family); `FONT_FAMILY` is the face labels use
+- `AUDIO_SETTINGS` — master/effects levels, whether to start muted, and the `localStorage` key
 - `BREAKPOINTS` — mobile/tablet/desktop thresholds
+- `CELEBRATION` — the finale's words, and the optional `gift.png` it would rather use
+
+### 5. Sound
+
+There are no audio files in the project. Every sound is **synthesised** from two
+primitives — a `tone()` and a `noise()` burst — so the game has sound to play
+without downloading a byte of it. `AudioManager` owns one `AudioContext` and a
+two-knob gain graph (`master` → `sfx`), and sounds are registered as *recipes*:
+small functions that build their nodes on that context and start them.
+
+Screens only ever talk in names, never recipes:
+
+```ts
+import { SFX } from '../audio/sfx';
+
+audio.play(SFX.whack);                                  // as written
+audio.play(SFX.combo, { rate: 1 + (tier - 2) * 0.18 }); // pitched by the tier
+```
+
+That indirection is the point: the bank in `src/game/audio/sfx.ts` can be
+re-voiced, or replaced with real recordings, and no screen changes.
+
+Two browser rules are handled for you:
+
+- **Autoplay.** A context may only start from a user gesture, so it is created
+  lazily and the first tap or keypress resumes it. Anything played before that
+  is *dropped* rather than queued, so a page never erupts into a pile of stacked
+  sounds the moment the player touches something.
+- **The player's choice.** `setMuted` / `setVolume` persist to `localStorage`, so
+  the setting survives a reload. `createSoundToggle(audio)` in
+  `core/display/soundToggle.ts` is a ready-made button — the menu has one.
+
+`play()` also warns and returns `false` for an unknown name, and `load()` warns
+and resolves to `null` for a missing file. Sound is decoration; decoration is
+never allowed to break the game.
 
 ## Cookbook (common tasks)
 
@@ -357,6 +401,49 @@ loads it in the preloader, so labels look identical on every device. To swap it 
 Text created before the face resolves silently falls back to a browser default, so always
 `await assets.loadFont(...)` up front (the preloader already does). Prefer an OFL/free font so
 you can ship it; Pixi registers the `FontFace` for you — no CSS `@font-face` needed.
+
+### Play a sound
+
+Sounds are named constants from `src/game/audio/sfx.ts`, so a typo is caught by
+the type checker and everything the game can say is listed in one file:
+
+```ts
+import { SFX } from '../audio/sfx';
+
+button.on('pointerdown', () => audio.play(SFX.tap));
+```
+
+`{ volume, rate }` shape that one play — `rate` is a pitch multiplier, which is
+how the same recipe rises with the combo. Add a new sound by adding a recipe to
+`SFX_RECIPES` in that same file:
+
+```ts
+[SFX.pop]: (ctx, out, o) => {
+    tone(ctx, out, { wave: 'sine', freq: 800, freqTo: 400, ms: 90, gain: 0.3 * o.volume, rate: o.rate });
+},
+```
+
+### Add a sound file
+
+Prefer a recording over synthesis? Drop the file into `public/assets/audio/` and
+load it: it registers under its alias, and `play(alias)` then treats it exactly
+like a synthesised sound.
+
+```ts
+// one file
+await audio.load({ alias: 'pop', src: 'assets/audio/pop.wav' });
+
+// or a list, with progress like the asset loader
+await audio.loadAll(
+    [{ alias: 'pop', src: 'assets/audio/pop.wav' }],
+    (progress) => bar.setProgress(progress),
+);
+
+audio.play('pop');
+```
+
+Loading happens *before* the first gesture is fine — the context simply starts
+suspended and resumes on the first tap.
 
 ### React to a tap / click
 
@@ -499,12 +586,17 @@ const texture = await context.assets.load(ASSETS.logo, (progress) => bar.setProg
 ```
 
 Web fonts work the same way through the `FONTS` registry — see **[Add a web font](#add-a-web-font)**.
+Audio is the exception: it goes through `context.audio` instead, because a sound
+is played rather than cached as an image — see **[Add a sound file](#add-a-sound-file)**.
 
 ## Debugging tips
 
 - In **dev builds only**, the running game is exposed as `window.game`. From the browser
   console you can do things like `game.screens.active`, `game.responsive.viewport`, or even
   `game.screens.start('Game')`. This is stripped from production builds.
+- `game.audio` is the sound manager: `game.audio.muted`, `game.audio.setVolume(0.3)`,
+  `game.audio.play('whack')`. Nothing plays until the page has seen a click or a keypress —
+  that is the browser's autoplay policy, not a bug.
 - Hot reload is on: change a color or a coordinate, save, and see it instantly.
 - If a screen looks empty, check that you `addChild`'d to `world` or `ui` (not to nowhere),
   and that anything you want to move every frame is ticked from `update(dt)`.
@@ -515,6 +607,8 @@ Web fonts work the same way through the `FONTS` registry — see **[Add a web fo
   stable and extend it only when it genuinely helps.
 - **One screen per file**, named `SomethingScreen.ts`, registered in `screens/index.ts`.
 - **New assets** always go through `config.ts` (`ASSETS`) — never hard-code paths in screens.
+- **New sounds** go through the `SFX` constants in `src/game/audio/sfx.ts` — screens play
+  names, never `tone()` / `noise()` directly.
 - **Clean up after yourself** in `destroy()`: unsubscribe from `input`,
   `keyboard` and any `responsive.onResize(...)` listeners you created.
 - **Scale by `dt`**, not by frame count.

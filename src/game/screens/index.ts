@@ -1,6 +1,7 @@
 import { SCREENS } from '../config';
 import type { ScreenManager } from '../core/screens/ScreenManager';
 import { CelebrationScreen } from './CelebrationScreen';
+import { LetterScreen } from './LetterScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 import { PlayScreen } from './PlayScreen';
 import { PreloaderScreen } from './PreloaderScreen';
@@ -13,5 +14,6 @@ export function registerScreens(screens: ScreenManager): void {
         .register(SCREENS.MainMenu, () => new MainMenuScreen())
         .register(SCREENS.Play, () => new PlayScreen())
         .register(SCREENS.Results, () => new ResultsScreen())
-        .register(SCREENS.Celebration, () => new CelebrationScreen());
+        .register(SCREENS.Celebration, () => new CelebrationScreen())
+        .register(SCREENS.Letter, () => new LetterScreen());
 }

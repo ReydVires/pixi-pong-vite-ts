@@ -1,5 +1,6 @@
 import type { Application, Container } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader';
+import type { AudioManager } from '../audio/AudioManager';
 import type { KeyboardInput } from '../input/KeyboardInput';
 import type { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
@@ -34,6 +35,9 @@ export interface ScreenContext {
 
     /** Asset access with progress reporting. */
     readonly assets: AssetLoader;
+
+    /** Sound: `audio.play(SFX.tap)`. Shared by every screen, never destroyed per screen. */
+    readonly audio: AudioManager;
 
     /** Viewport scaling, orientation and breakpoint info. */
     readonly responsive: Responsive;

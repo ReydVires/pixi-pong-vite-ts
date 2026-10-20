@@ -1,11 +1,13 @@
 import type { Text } from 'pixi.js';
+import { SFX } from '../audio/sfx';
 import { Pulse } from '../components/Pulse';
 import { Spin } from '../components/Spin';
-import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
+import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { createButton } from '../core/display/button';
 import { createImage } from '../core/display/image';
 import { createLabel } from '../core/display/label';
+import { createSoundToggle } from '../core/display/soundToggle';
 import { Entity } from '../core/entities/Entity';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import type { ViewportMetrics } from '../core/responsive/Responsive';
@@ -18,7 +20,7 @@ export class MainMenuScreen implements Screen {
     private info: Text | null = null;
 
     init(context: ScreenContext, _params: void): void {
-        const { world, ui, assets, screens, responsive } = context;
+        const { world, ui, assets, screens, responsive, audio } = context;
 
         // Backdrop lives in the world layer so it can bleed past the design area.
         world.addChild(createColorBackground(COLORS.clear, responsive));
@@ -37,12 +39,23 @@ export class MainMenuScreen implements Screen {
         this.entities.push(logo);
 
         const play = createButton('Play', () => {
+            audio.play(SFX.tap);
             this.stopListening?.();
             this.stopListening = null;
             void screens.start(SCREENS.Play, { stageId: FIRST_STAGE_ID });
         }, { width: 340, height: 88, fontSize: 40 });
         play.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 140);
         ui.addChild(play);
+
+        // Top corner, away from the logo and the Play button. The toggle only
+        // flips the mute; confirming the sound is back is the screen's job, so
+        // the click is wired here rather than inside the button.
+        const sound = createSoundToggle(audio);
+        sound.position.set(GAME_WIDTH - 64, 64);
+        sound.on('pointerdown', () => {
+            if (!audio.muted) audio.play(SFX.tap);
+        });
+        ui.addChild(sound);
 
         // Show a tiny blurb so first-time players know the tutorial is ahead
         const tut = createLabel(

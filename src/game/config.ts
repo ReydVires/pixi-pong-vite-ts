@@ -1,4 +1,4 @@
-import type { ColorSource } from 'pixi.js';
+import { Color, type ColorSource } from 'pixi.js';
 
 /** Logical game resolution. Portrait by default. */
 export const GAME_WIDTH = 768;
@@ -18,7 +18,7 @@ export const SCREEN_CENTER = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
 export const BREAKPOINTS = { tablet: 600, desktop: 900 } as const;
 
 /** Color shown before the first screen draws anything. */
-export const CLEAR_COLOR: ColorSource = 0x028af8;
+export const CLEAR_COLOR: ColorSource = new Color('#028af8');
 
 /** Palette used by the screens. */
 export const COLORS = {
@@ -50,6 +50,7 @@ export const SCREENS = {
     Play: 'Play',
     Results: 'Results',
     Celebration: 'Celebration',
+    Letter: 'Letter',
 } as const;
 
 /** Bundled text face. The preloader loads it before any label is created. */
@@ -74,6 +75,25 @@ export const FONTS = {
 } as const;
 
 /**
+ * Audio defaults.
+ *
+ * Sounds are synthesised rather than loaded (see `core/audio/synth.ts` and
+ * `audio/sfx.ts`), so there is nothing to ship and no preloading to do. To add
+ * recorded sounds instead, register them with `audio.load({ alias, src })` and
+ * put the files in `public/assets/audio/`.
+ */
+export const AUDIO_SETTINGS = {
+    /** Master level, 0..1. */
+    masterVolume: 0.8,
+    /** Level of the effects bus, relative to master. */
+    sfxVolume: 1,
+    /** Start muted? Read from storage first if the player has chosen before. */
+    muted: false,
+    /** Where the player's own volume/mute choice is remembered. */
+    storageKey: 'whack-a-capy:audio',
+} as const;
+
+/**
  * The personal half of the finale — edit the words, not the code.
  *
  * `gift` is optional in practice: drop a picture at `public/assets/gift.png`
@@ -86,4 +106,18 @@ export const CELEBRATION = {
     title: 'Happy Birthday!',
     message: 'You cleared every stage. Time for your real present.',
     gift: 'assets/gift.png',
+
+    /** The letter behind the "Read the letter" button. One string per line. */
+    letterTitle: 'A note for you',
+    letter: [
+        'You cleared every stage,',
+        'every combo, every hazard.',
+        '',
+        'This is the part where I run out of',
+        'levels and have to say it plainly:',
+        '',
+        'happy birthday.',
+        '',
+        'Thanks for playing.',
+    ],
 } as const;

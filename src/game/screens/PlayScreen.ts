@@ -1,5 +1,6 @@
 import { Container } from 'pixi.js';
 import type { Graphics, Text } from 'pixi.js';
+import { SFX } from '../audio/sfx';
 import { Burst } from '../components/Burst';
 import { Shockwave } from '../components/Shockwave';
 import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
@@ -387,11 +388,20 @@ export class PlayScreen implements Screen<PlayParams> {
         // tutorial is the exception — it introduces the verb, not the scolding,
         // so the red "Miss!" arrives with Stage 1. The tally still moves.
         if (!this.stage?.tutorial) this.addPopup('Miss!', x, y - 46, COLORS.hazard);
+        // Only a tap makes a sound — an escape is the game's doing, not the
+        // player's, so it stays silent however much it costs them.
+        this.context?.audio.play(SFX.miss);
         this.updateHud();
     }
 
     private whack(capy: Capy): void {
         const downed = capy.hitTarget.hit();
+        // Rising with the combo, so a hot streak sounds hotter as well as
+        // scoring more — and a wound gets its own duller hit, so a `tough`
+        // that survives still sounds like progress rather than a bug.
+        this.context?.audio.play(downed ? SFX.whack : SFX.wound, {
+            rate: 1 + (this.combo.multiplier - 1) * 0.06,
+        });
         capy.flash();
         // Always redraw, not just on a wound: the finishing blow has to clear
         // the last pip too, or a downed `tough` sinks away still showing one.
@@ -427,6 +437,7 @@ export class PlayScreen implements Screen<PlayParams> {
      * `flushRetired` spares hazards the miss it charges everything else.
      */
     private strikeHazard(capy: Capy): void {
+        this.context?.audio.play(SFX.hazard);
         capy.flash();
         capy.markSettled();
         this.spray(capy, SOFT_BURST, COLORS.hazard);
@@ -451,6 +462,7 @@ export class PlayScreen implements Screen<PlayParams> {
         // gold over the whole screen, sparks on everything it caught, and a
         // label loud enough to explain the sudden pile of points.
         const { x, y } = resolved.hole.slot;
+        this.context?.audio.play(SFX.clear);
         this.addShockwave(x, y);
         this.spray(resolved, SWEEP_BURST);
         this.sweepFlashLeft = SWEEP_FLASH_MS;
@@ -691,6 +703,7 @@ export class PlayScreen implements Screen<PlayParams> {
         const quit = createButton(
             'Quit to Menu',
             () => {
+                this.context?.audio.play(SFX.tap);
                 this.paused = false;
                 void this.context?.screens.start(SCREENS.MainMenu);
             },
@@ -704,6 +717,9 @@ export class PlayScreen implements Screen<PlayParams> {
 
     private togglePause(): void {
         this.paused = !this.paused;
+        // One click covers pause, resume and the ESC key, which are the same
+        // action as far as the player is concerned.
+        this.context?.audio.play(SFX.tap);
         if (this.pauseOverlay) this.pauseOverlay.visible = this.paused;
     }
 
@@ -735,6 +751,9 @@ export class PlayScreen implements Screen<PlayParams> {
         this.comboPunch = COMBO_PUNCH_MS;
         this.shakeLeft = SHAKE_MS;
         this.shakeTime = 0;
+        // Same beat as the kick and the shout — the tier, heard. The ladder
+        // tops out at x5, so the pitch climbs two semitones a step and stops.
+        this.context?.audio.play(SFX.combo, { rate: 1 + (multiplier - 2) * 0.18 });
 
         const label = this.comboWord;
         const word = COMBO_WORDS[multiplier];

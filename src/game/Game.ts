@@ -1,6 +1,8 @@
 import { Application } from 'pixi.js';
+import { registerSfx } from './audio/sfx';
 import { CLEAR_COLOR, GAME_HEIGHT, GAME_WIDTH, SCREENS } from './config';
 import { AssetLoader } from './core/assets/AssetLoader';
+import { AudioManager } from './core/audio/AudioManager';
 import { Responsive } from './core/responsive/Responsive';
 import { ScreenManager } from './core/screens/ScreenManager';
 import { registerScreens } from './screens';
@@ -22,12 +24,14 @@ export interface GameOptions {
 export class Game {
     readonly app = new Application();
     readonly assets = new AssetLoader();
+    readonly audio = new AudioManager();
     readonly responsive: Responsive;
     readonly screens: ScreenManager;
 
     constructor() {
         this.responsive = new Responsive(this.app);
-        this.screens = new ScreenManager(this.app, this.assets, this.responsive);
+        this.screens = new ScreenManager(this.app, this.assets, this.audio, this.responsive);
+        registerSfx(this.audio);
         registerScreens(this.screens);
     }
 
@@ -67,6 +71,7 @@ export class Game {
     /** Tear down the active screen and the renderer. */
     destroy(): void {
         this.screens.dispose();
+        this.audio.destroy();
         this.responsive.destroy();
         this.app.destroy(true);
     }

@@ -1,6 +1,7 @@
 import { Container, Ticker } from 'pixi.js';
 import type { Application } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader';
+import type { AudioManager } from '../audio/AudioManager';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
@@ -33,6 +34,7 @@ export class ScreenManager {
     constructor(
         private readonly app: Application,
         private readonly assets: AssetLoader,
+        private readonly audio: AudioManager,
         private readonly responsive: Responsive,
     ) {
         // Forward viewport changes to whichever screen is active.
@@ -93,6 +95,7 @@ export class ScreenManager {
             ui,
             screens: this,
             assets: this.assets,
+            audio: this.audio,
             input,
             keyboard,
             responsive: this.responsive,
