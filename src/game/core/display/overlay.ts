@@ -12,6 +12,10 @@ const FIGURE_Y = -86;
 /** Body lines start here when there is no figure to sit above them. */
 const BODY_START_Y = -36;
 const BODY_STEP_Y = 62;
+/** The hero line's own size and the breathing room around it. */
+const HERO_FONT_SIZE = 96;
+const HERO_GAP_ABOVE = 34;
+const HERO_GAP_BELOW = 30;
 /** Gap between the last body line and the first button. */
 const BUTTON_GAP_Y = 76;
 const BUTTON_STEP_Y = 96;
@@ -42,6 +46,14 @@ export interface OverlayOptions {
      * figure at the origin and the overlay decides where the origin goes.
      */
     readonly figure?: Container;
+    /**
+     * The headline number of the panel, e.g. the final score.
+     *
+     * Drawn much larger than the body lines and given its own breathing room,
+     * so the one figure the player actually came to see cannot be mistaken for
+     * a detail line. Sits between the figure and the lines.
+     */
+    readonly hero?: string;
     /** Lines of detail under the title, e.g. "Score 420". */
     readonly lines?: readonly string[];
     /** Buttons, top to bottom. The first is treated as the primary action. */
@@ -97,6 +109,18 @@ export function createOverlay(responsive: Responsive, options: OverlayOptions): 
     if (options.figure) {
         options.figure.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + FIGURE_Y);
         body.addChild(options.figure);
+    }
+
+    // The hero number: the panel's headline, so it gets its own size and its
+    // own margins rather than sharing the body rhythm. The gaps above and below
+    // are what stop a 96px number from crowding the stars or the detail lines.
+    if (options.hero) {
+        y += HERO_GAP_ABOVE;
+        const hero = createLabel(options.hero, { fontSize: HERO_FONT_SIZE });
+        hero.anchor.set(0.5);
+        hero.position.set(SCREEN_CENTER.x, y);
+        body.addChild(hero);
+        y += HERO_FONT_SIZE / 2 + HERO_GAP_BELOW;
     }
 
     for (const line of options.lines ?? []) {

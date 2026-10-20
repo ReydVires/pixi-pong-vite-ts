@@ -25,6 +25,7 @@ import type { TapOutcome } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
 import type { BurstOptions } from '../systems/particles';
 import { SessionClock, secondsRemaining } from '../systems/SessionClock';
+import { Easing, TweenSystem } from '../systems/TweenSystem';
 
 /** Centre of the honeycomb in design units — leaves room for HUD and prompt. */
 const GRID_CENTER_Y = 560;
@@ -179,7 +180,7 @@ export class PlayScreen implements Screen<PlayParams> {
     private clock: SessionClock | null = null;
     private spawner: Spawner | null = null;
 
-    private readonly score = new ScoreKeeper();
+    private readonly scoreKeeper = new ScoreKeeper();
     private readonly combo = new ComboTracker();
     private hits = 0;
     private misses = 0;
@@ -236,6 +237,11 @@ export class PlayScreen implements Screen<PlayParams> {
     private shakeLeft = 0;
     private shakeTime = 0;
     private scoreLabel: Text | null = null;
+    /** Score currently shown on the HUD. */
+    private displayedScore = 0;
+    /** Score to tween toward. */
+    private targetScore = 0;
+    private readonly tweens = new TweenSystem();
     private comboLabel: Text | null = null;
     private timerLabel: Text | null = null;
     private promptLabel: Text | null = null;
@@ -367,6 +373,9 @@ export class PlayScreen implements Screen<PlayParams> {
         this.shakeLeft = 0;
         this.shakeTime = 0;
         this.scoreLabel = null;
+        this.displayedScore = 0;
+        this.targetScore = 0;
+        this.tweens.clear();
         this.comboLabel = null;
         this.timerLabel = null;
         this.promptLabel = null;
@@ -603,9 +612,9 @@ export class PlayScreen implements Screen<PlayParams> {
      * and at the default height they would be drawn straight through it.
      */
     private payBounty(capy: Capy, points: number, popupDrop = 0): void {
-        this.score.add(points);
+        this.scoreKeeper.add(points);
+        this.startScoreTween(this.scoreKeeper.score);
         this.spawnPopup(capy, points, popupDrop);
-        this.updateHud();
     }
 
     // --- Spawning -----------------------------------------------------------
@@ -695,7 +704,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
         const attempts = this.hits + this.misses;
         const accuracy = attempts > 0 ? this.hits / attempts : 0;
-        const stars = starsFor(this.score.score, stage.starThresholds);
+        const stars = starsFor(this.scoreKeeper.score, stage.starThresholds);
         const next = findNextStage(stage.id);
 
         // Earn a star to move on. Advance is the reward for engaging with the
@@ -720,7 +729,6 @@ export class PlayScreen implements Screen<PlayParams> {
         actions.push({ label: 'Menu', onTap: () => void this.context?.screens.start(SCREENS.MainMenu) });
 
         const lines = [
-            `${this.score.score}`,
             `Accuracy ${Math.round(accuracy * 100)}%   ·   Best Combo ${this.combo.bestCount}`,
         ];
         if (!advanced) {
@@ -733,6 +741,9 @@ export class PlayScreen implements Screen<PlayParams> {
             // A row of stars, drawn where the panel's flow wants it, rather than
             // at a fixed offset that could collide with the title or the lines.
             figure: this.createStars(stars),
+            // The score is the headline, not a detail line: it gets the hero
+            // slot so it reads at a glance the moment the stage ends.
+            hero: `${this.scoreKeeper.score}`,
             lines,
             actions,
             onAction: () => this.context?.audio.play(SFX.tap),
@@ -780,6 +791,9 @@ export class PlayScreen implements Screen<PlayParams> {
         this.scoreLabel.anchor.set(0, 0.5);
         this.scoreLabel.position.set(56, rowY);
         ui.addChild(this.scoreLabel);
+        this.displayedScore = 0;
+        this.targetScore = 0;
+        this.tweens.clear();
 
         this.timerLabel = createLabel('0', { fontSize: 52 });
         this.timerLabel.anchor.set(0.5, 0.5);
@@ -872,9 +886,51 @@ export class PlayScreen implements Screen<PlayParams> {
         if (this.pauseOverlay) this.pauseOverlay.visible = next === 'paused';
     }
 
-    private updateHud(): void {
-        if (this.scoreLabel) this.scoreLabel.text = `${this.score.score}`;
+    private startScoreTween(next: number): void {
+        const label = this.scoreLabel;
+        if (!label) return;
+        if (next === this.targetScore) return;
+        const delta = next - this.targetScore;
+        if (delta === 0) return;
+        this.targetScore = next;
+        const durationMs = Math.min(420, 220 + Math.abs(delta) * 0.08);
 
+        this.tweens.to('score', this.displayedScore, next, {
+            durationMs,
+            easing: Easing.easeOutCubic,
+            onUpdate: (value) => {
+                this.displayedScore = Math.round(value);
+                label.text = `${this.displayedScore}`;
+            },
+            onComplete: () => {
+                this.displayedScore = next;
+                label.text = `${next}`;
+            },
+        });
+
+        // Keep the HUD emphasis local; the tween system owns timing/easing.
+        const scaleFrom = Math.abs(delta) >= 50 ? 1.12 : 1.08;
+        label.scale.set(scaleFrom);
+        label.rotation = (Math.random() - 0.5) * 0.08;
+        this.tweens.to('score-scale', scaleFrom, 1, {
+            durationMs: 300,
+            easing: Easing.easeOutBack,
+            onUpdate: (scale) => label.scale.set(scale),
+        });
+        this.tweens.to('score-rotation', label.rotation, 0, {
+            durationMs: 300,
+            easing: Easing.easeOutCubic,
+            onUpdate: (rotation) => {
+                label.rotation = rotation;
+            },
+        });
+    }
+
+    private updateScoreTween(dt: number): void {
+        this.tweens.update(dt);
+    }
+
+    private updateHud(): void {
         if (this.comboLabel) {
             const { multiplier, count } = this.combo;
             this.comboLabel.text = count > 0 ? `x${multiplier}  combo ${count}` : '';
@@ -1074,6 +1130,8 @@ export class PlayScreen implements Screen<PlayParams> {
             this.sweepFlashLeft = Math.max(0, this.sweepFlashLeft - dt);
             if (this.sweepFlash) this.sweepFlash.alpha = SWEEP_FLASH_PEAK * (this.sweepFlashLeft / SWEEP_FLASH_MS);
         }
+
+        this.updateScoreTween(dt);
 
         if (this.comboPunch > 0) this.comboPunch = Math.max(0, this.comboPunch - dt);
         if (this.comboLabel) this.comboLabel.scale.set(1 + COMBO_PUNCH_SCALE * (this.comboPunch / COMBO_PUNCH_MS));

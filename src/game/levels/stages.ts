@@ -137,7 +137,7 @@ export const STAGES: readonly StageDef[] = [
 ];
 
 /** Stage the menu starts with. */
-export const FIRST_STAGE_ID = STAGES[5].id;
+export const FIRST_STAGE_ID = STAGES[0].id;
 
 export function findStage(id: string): StageDef {
     const stage = STAGES.find((candidate) => candidate.id === id);

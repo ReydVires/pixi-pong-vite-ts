@@ -129,7 +129,7 @@ src/
     │   └── entities/           Entity + Component — composable per-frame behaviors
     ├── audio/                  sfx — every sound the game makes, by name (data only)
     ├── levels/                 What spawns: capy archetypes + the stage table (data only)
-    ├── systems/                Pure rules: SessionClock, ScoreKeeper, ComboTracker, Spawner
+    ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner, TweenSystem
     ├── components/             Gameplay components (Emerge, HitTarget, Spin, Pulse)
     ├── entities/               Display objects built from components: Hole, Capy, capyFace
     └── screens/                The actual game screens  ← most of your work happens here
@@ -226,7 +226,8 @@ import { createOverlay } from '../core/display/overlay';
 const overlay = createOverlay(responsive, {
     title: 'Stage 2 complete',
     figure: this.createStars(2),          // optional graphic (e.g. a star row)
-    lines: ['420', 'Accuracy 92%   ·   Best Combo 11'],
+    hero: '420',                          // optional large headline value
+    lines: ['Accuracy 92%   ·   Best Combo 11'],
     actions: [
         { label: 'Next', onTap: () => screens.start(SCREENS.Play, { stageId: 'stage-3' }) },
         { label: 'Replay', onTap: () => screens.start(SCREENS.Play, { stageId: 'stage-2' }) },
@@ -549,6 +550,42 @@ a row of stars), the detail `lines`, and the `actions` (buttons) in one flow, so
 collide. The first action is styled as the primary. Pass `onAction` to play a click sound.
 
 See also **[Modals that aren't screens](#modals-that-arent-screens)** below.
+
+### Tween a numeric value
+
+PixiJS provides the ticker, but not a general-purpose tween API. The reusable
+`TweenSystem` uses the screen's `dt` from that ticker to interpolate numeric
+values with an easing function. Retargeting the same key replaces the active
+tween; call `clear()` when the owning screen is destroyed.
+
+```ts
+import { Easing, TweenSystem } from '../systems/TweenSystem';
+
+private readonly tweens = new TweenSystem();
+
+showScore(next: number): void {
+    this.tweens.to('score', this.displayedScore, next, {
+        durationMs: 300,
+        easing: Easing.easeOutCubic,
+        onUpdate: (value) => {
+            this.displayedScore = Math.round(value);
+            this.scoreLabel.text = `${this.displayedScore}`;
+        },
+    });
+}
+
+update(dt: number): void {
+    this.tweens.update(dt);
+}
+
+destroy(): void {
+    this.tweens.clear();
+}
+```
+
+Built-in easing functions are `linear`, `easeOutCubic`, and `easeOutBack`. A tween
+can animate any number; `onUpdate` decides how that value affects a Pixi display
+object, so the system itself stays independent of Pixi types.
 
 ### Animate something every frame
 
