@@ -21,7 +21,7 @@ export const STAGES: readonly StageDef[] = [
         holes: 4,
         spawn: [{ type: 'normal', weight: 1 }],
         spawnIntervalMs: [900, 1300],
-        maxConcurrent: 2,
+        maxConcurrent: 1,
         starThresholds: [10, 40, 100],
         tutorial: [
             { prompt: 'Tap the capy!', quota: 1, concurrent: 1, intervalMs: 0, hold: true },
@@ -54,10 +54,10 @@ export const STAGES: readonly StageDef[] = [
             { type: 'normal', weight: 3 },
             { type: 'tough', weight: 1 },
         ],
-        // Slightly quicker than Stage 1: the toughs sit in a hole longer, so
-        // the field needs topping up to keep the same whack-per-second feel.
+        // First regular stage with two capys allowed at once. Free-hole
+        // selection guarantees they occupy different holes.
         spawnIntervalMs: [800, 1200],
-        maxConcurrent: 3,
+        maxConcurrent: 2,
         // Stage 1's thresholds scaled by duration (35/30s), spawn pace and
         // the 3:1 mix — the tough is worth 30 to a normal's 10.
         starThresholds: [110, 220, 360],
@@ -89,7 +89,7 @@ export const STAGES: readonly StageDef[] = [
         // First appearance of `golden`: it sweeps the whole field on its way
         // down, paying a flat bounty per capy whatever it caught — a bomb
         // included, so clearing a field you were avoiding is the big payout.
-        // It wears a sparkle so it reads before the first tap.
+        // It wears a crown so it reads before the first tap.
         id: 'stage-4',
         title: 'Stage 4',
         durationMs: 35_000,

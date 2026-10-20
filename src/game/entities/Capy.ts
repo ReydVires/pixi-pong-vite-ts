@@ -176,15 +176,25 @@ export class Capy extends Entity {
             // Warning marker above the skull, clear of the ears.
             body.poly([0, -r * 1.15, r * 0.22, -r * 0.68, -r * 0.22, -r * 0.68], true).fill(COLORS.hazard);
         } else if (this.type.effect === 'clear') {
-            // Four-point sparkle, the mirror of the hazard's spike: "this one is
-            // good news" has to read before the first tap, not after it.
-            const points: number[] = [];
-            for (let i = 0; i < 8; i++) {
-                const angle = (Math.PI / 4) * i - Math.PI / 2;
-                const arm = (i % 2 === 0 ? 0.26 : 0.095) * r;
-                points.push(Math.cos(angle) * arm, -r * 0.95 + Math.sin(angle) * arm);
-            }
-            body.poly(points, true).fill(COLORS.white).stroke({ width: 2, color: this.type.accent });
+            // Leave a 4px visual gap above the ear tips so the gold crown
+            // remains distinct from the golden coat while staying centered.
+            const crownLift = r * 0.27 + 4;
+            body
+                .poly(
+                    [
+                        -r * 0.56, -r * 0.68 - crownLift,
+                        -r * 0.56, -r * 1.12 - crownLift,
+                        -r * 0.25, -r * 0.91 - crownLift,
+                        0, -r * 1.3 - crownLift,
+                        r * 0.25, -r * 0.91 - crownLift,
+                        r * 0.56, -r * 1.12 - crownLift,
+                        r * 0.56, -r * 0.68 - crownLift,
+                    ],
+                    true,
+                )
+                .fill(COLORS.star)
+                .stroke({ width: 3, color: this.type.accent });
+            body.roundRect(-r * 0.59, -r * 0.77 - crownLift, r * 1.18, r * 0.18, r * 0.05).fill(COLORS.star);
         }
 
         return body;

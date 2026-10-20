@@ -28,6 +28,8 @@ export interface BurstOptions {
     count: number;
     x: number;
     y: number;
+    /** Particle silhouette, rendered by `Burst`. @default 'circle' */
+    shape?: 'circle' | 'star';
     /** Speed band in px/s. */
     speed: readonly [number, number];
     /** Lifetime band in ms. */

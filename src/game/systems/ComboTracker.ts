@@ -8,7 +8,7 @@ export class ComboTracker {
     /** Hits needed to earn the next step up the multiplier ladder. */
     private readonly perStep = 4;
     /** Ceiling the multiplier stops climbing at. */
-    private readonly cap = 5;
+    private readonly cap = 20;
 
     private streak = 0;
     private bestStreak = 0;

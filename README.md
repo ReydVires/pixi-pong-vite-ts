@@ -7,10 +7,10 @@ Tap capys as they pop out of a honeycomb of holes, build up your combo, and don'
 
 ## What you get out of the box
 
-- 🎮 **Data-driven gameplay** — stages, capy archetypes and spawn logic live as pure data (`levels/`)
+- 🎮 **Data-driven gameplay** — stages, capy archetypes and spawn logic live as pure data (`levels/`); Stage 2 introduces two simultaneous targets in separate holes
 - 🧠 **Explicit game state** — `PlayScreen` uses a single `PlayMode` (`playing` | `paused` | `finished`) with controlled transitions via `enter()` for predictable state
 - 🎯 **Centralised hit testing** — one pointer handler, honest accuracy accounting
-- 💥 **Juice without noise** — combo milestones kick the field, show comic words, and pitch the ladder up, with no unnecessary particles
+- 💥 **Juice without noise** — star-shaped whack bursts, a crowned golden capy, and combo milestones that kick the field and show comic words
 - 🔊 **Procedural audio** — synthesised SFX from `tone()`/`noise()` primitives, no audio files shipped
 - 🎨 **Component-based entities** — `Entity` + `Component` composition rather than deep inheritance
 - 🖥️ **Responsive + safe-area aware** — uniform scaling with notch/home-indicator handling via `viewport.safeArea`

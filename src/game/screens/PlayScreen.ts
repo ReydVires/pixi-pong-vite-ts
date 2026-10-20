@@ -62,9 +62,9 @@ const COMBO_PUNCH_MS = 260;
 /** Extra scale at the start of that punch. */
 const COMBO_PUNCH_SCALE = 0.4;
 /** What a whack throws: fast and short, gone before the next capy arrives. */
-const HIT_BURST = { count: 9, speed: [220, 640], lifeMs: [220, 420], size: [3, 7] } as const;
-/** The lighter puff behind a wound, a hazard hit or an escape. */
-const SOFT_BURST = { count: 6, speed: [140, 380], lifeMs: [200, 380], size: [2, 5] } as const;
+const HIT_BURST = { count: 9, speed: [220, 640], lifeMs: [220, 420], size: [6.9, 12.65], shape: 'star' } as const;
+/** The lighter star burst behind a wound, a hazard hit or an escape. */
+const SOFT_BURST = { count: 6, speed: [140, 380], lifeMs: [200, 380], size: [4, 8], shape: 'star' } as const;
 /** What the golden's sweep throws — the largest handful in the game. */
 const SWEEP_BURST = { count: 22, speed: [260, 900], lifeMs: [320, 640], size: [4, 9] } as const;
 /** How long the gold wash of a sweep takes to fade, in ms. */
@@ -119,7 +119,11 @@ const COMBO_WORDS: Record<number, string> = {
     2: 'NICE!',
     3: 'GREAT!',
     4: 'AWESOME!',
-    5: 'UNSTOPPABLE!',
+    6: 'UNSTOPPABLE!',
+    9: 'CAPY MASTER!',
+    12: 'CAPY LEGEND!',
+    14: 'KEEP UP!',
+    20: 'UNBEATABLE!',
 };
 /** Lifetime of the shout, in ms. */
 const COMBO_WORD_MS = 760;

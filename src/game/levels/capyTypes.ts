@@ -8,7 +8,7 @@ import type { CapyType, CapyTypeId } from './types';
  * case — `hp` decides how many whacks, the type decides whether it lingers.
  *
  * Colours are placeholders for real art; they are read by the shapes drawn in
- * `entities/Capy.ts` and by the sparks a whack throws in `PlayScreen`.
+ * `entities/Capy.ts` and by the star bursts a whack throws in `PlayScreen`.
  */
 export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
     normal: {
