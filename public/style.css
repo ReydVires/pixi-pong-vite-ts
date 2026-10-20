@@ -17,6 +17,23 @@ body {
     overflow: hidden;
 }
 
+/*
+ * Safe-area insets, published as CSS variables so the game can read them.
+ *
+ * The viewport meta uses `viewport-fit=cover`, which lets the canvas reach the
+ * physical screen edges — without it iOS insets the whole page and a strip of
+ * the body background shows above the game. Covering means the artwork also runs
+ * *under* the notch, the Dynamic Island and the home indicator, so those bands
+ * are republished here for the UI layer to keep clear of (see Responsive).
+ * `env()` needs a length fallback: older browsers drop the declaration entirely.
+ */
+:root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+}
+
 /* Static layout container; the Responsive service sizes the canvas to it. */
 #game-container {
     width: 100%;

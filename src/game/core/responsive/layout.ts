@@ -68,3 +68,72 @@ export function centeredRect(size: Size, centerX: number, centerY: number): Rect
         height: size.height,
     };
 }
+
+/** Screen edges obstructed by hardware (notch, Dynamic Island, home indicator). */
+export interface Insets {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+}
+
+/** No obstruction — the desktop/browser default. */
+export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * The design-space rectangle a screen's UI must stay inside to clear the
+ * hardware, given the viewport's safe-area insets in CSS pixels.
+ *
+ * The insets arrive in CSS pixels, but layout happens in design units, so each
+ * one is divided by the current `scale`. The result is intersected with the
+ * design box (0,0..`designWidth`,`designHeight`) because the UI layer is
+ * documented to stay within the design area: a screen that shifts content for
+ * the notch must not push it off the design box on a device whose inset is
+ * larger than the letterbox margin. When that happens the intersection wins,
+ * which clamps the safe area rather than letting it invert.
+ */
+export function safeAreaRect(
+    insets: Insets,
+    scale: number,
+    designWidth: number,
+    designHeight: number,
+): Rect {
+    const top = Math.min(insets.top / scale, designHeight / 2);
+    const bottom = Math.min(insets.bottom / scale, designHeight / 2);
+    const left = Math.min(insets.left / scale, designWidth / 2);
+    const right = Math.min(insets.right / scale, designWidth / 2);
+
+    return {
+        x: left,
+        y: top,
+        width: designWidth - left - right,
+        height: designHeight - top - bottom,
+    };
+}
+
+/**
+ * Read the safe-area insets the page published as CSS variables.
+ *
+ * The values are lengths like `47px` or `0px`, so they are parsed rather than
+ * trusted as numbers. Anything unreadable counts as zero: a missing inset only
+ * ever means "assume nothing is obstructed", which is the pre-existing
+ * behaviour, so a browser that hides `env()` degrades to the old layout instead
+ * of breaking. Returns `NO_INSETS` outside a DOM (e.g. when unit-tested).
+ */
+export function readInsets(root: HTMLElement | null): Insets {
+    if (!root || typeof getComputedStyle !== 'function') return NO_INSETS;
+
+    const style = getComputedStyle(root);
+    const read = (name: string): number => {
+        const value = style.getPropertyValue(name).trim();
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    };
+
+    return {
+        top: read('--safe-top'),
+        right: read('--safe-right'),
+        bottom: read('--safe-bottom'),
+        left: read('--safe-left'),
+    };
+}

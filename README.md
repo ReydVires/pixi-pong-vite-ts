@@ -547,7 +547,7 @@ stretched, never cropped.
 - **`context.ui`** is drawn above the world. Keep interactive elements inside the 768×1024
   design area so they stay on screen.
 - **`Screen.onResize(viewport)`** fires on every resize/orientation change.
-- `viewport` exposes `scale`, `visible`, `visibleBounds`, `orientation` (`portrait` /
+- `viewport` exposes `scale`, `visible`, `visibleBounds`, `safeArea`, `orientation` (`portrait` /
   `landscape`) and `breakpoint` (`mobile` / `tablet` / `desktop`, measured by the shortest
   side so rotation doesn't flip it). Watch breakpoint changes with
   `responsive.onBreakpointChange(cb)`.
@@ -564,6 +564,34 @@ onResize(viewport: ViewportMetrics) {
     // viewport.breakpoint === 'mobile' | 'tablet' | 'desktop'
 }
 ```
+
+### Notches and home indicators
+
+The page opts into the full screen (`viewport-fit=cover` in `index.html`), so the canvas reaches
+the physical screen edges on a notched phone instead of being inset by iOS. That means artwork
+also runs *under* the notch, the Dynamic Island and the home indicator — which is what you want
+for a background, and not what you want for a button.
+
+`viewport.safeArea` is the design box minus those bands, expressed in **design units** (the CSS
+insets are divided by the current `scale` for you). UI that sits near an edge should use it:
+
+```ts
+// Push a top-corner control clear of the notch. `safeArea` is clamped to the
+// design box, so this can only move it down — never off the top.
+control.position.set(GAME_WIDTH - 64, Math.max(64, responsive.safeArea.y + 64));
+```
+
+Two details worth knowing:
+
+- The insets come from the `--safe-top/right/bottom/left` CSS variables in `public/style.css`,
+  read on every resize — rotating a phone moves the notch to a different edge, and the values
+  swap with it.
+- The safe area is **intersected with the design box**, never expanded past it. A device whose
+  inset is larger than the letterbox margin clamps rather than inverting the rectangle, so a
+  control can't be pushed off screen by an aggressive inset.
+
+Screens that don't opt in are unaffected: with no insets, `safeArea` is the whole design box and
+`Math.max(64, …)` returns its original value.
 
 Want a different orientation? Swap `GAME_WIDTH` / `GAME_HEIGHT` in `config.ts` (e.g. `1024×768`
 for landscape) — everything else adapts automatically.

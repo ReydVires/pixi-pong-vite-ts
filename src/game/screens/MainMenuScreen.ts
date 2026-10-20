@@ -50,8 +50,14 @@ export class MainMenuScreen implements Screen {
         // Top corner, away from the logo and the Play button. The toggle only
         // flips the mute; confirming the sound is back is the screen's job, so
         // the click is wired here rather than inside the button.
+        //
+        // Pushed in from the hardware: at `y = 64` from the top edge it sits
+        // under a notched phone's Dynamic Island, and the safe area already
+        // accounts for the design scale. `ui` is documented to stay inside the
+        // design box, so the inset is clamped there rather than pushing the
+        // button off the top of it.
         const sound = createSoundToggle(audio);
-        sound.position.set(GAME_WIDTH - 64, 64);
+        sound.position.set(GAME_WIDTH - 64, Math.max(64, responsive.safeArea.y + 64));
         sound.on('pointerdown', () => {
             if (!audio.muted) audio.play(SFX.tap);
         });

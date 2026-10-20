@@ -1,7 +1,7 @@
 import { Container, EventEmitter } from 'pixi.js';
 import type { Application, FederatedPointerEvent, Point } from 'pixi.js';
 import { BREAKPOINTS, GAME_HEIGHT, GAME_WIDTH } from '../../config';
-import { centeredRect, classifyBreakpoint, containScale, orientationOf, visibleSize } from './layout';
+import { centeredRect, classifyBreakpoint, containScale, orientationOf, readInsets, safeAreaRect, visibleSize } from './layout';
 import type { Breakpoint, Orientation, Rect, Size, Unsubscribe } from './layout';
 
 /** A snapshot of how the viewport maps onto the design resolution. */
@@ -16,6 +16,8 @@ export interface ViewportMetrics {
     readonly visible: Size;
     /** `visible` as a rectangle centered on the design area, in world coordinates. */
     readonly visibleBounds: Rect;
+    /** The design box minus the hardware's insets, in world coordinates. */
+    readonly safeArea: Rect;
     /** Detected viewport orientation. */
     readonly orientation: Orientation;
     /** Detected device class (based on the shortest viewport side). */
@@ -74,6 +76,11 @@ export class Responsive extends EventEmitter<ResponsiveEvents> {
 
     get visibleBounds(): Rect {
         return this.viewport.visibleBounds;
+    }
+
+    /** The design box minus any hardware obstruction — where UI should sit. */
+    get safeArea(): Rect {
+        return this.viewport.safeArea;
     }
 
     get orientation(): Orientation {
@@ -166,6 +173,11 @@ export class Responsive extends EventEmitter<ResponsiveEvents> {
         const visible = visibleSize(scale, width, height);
         const visibleBounds = centeredRect(visible, GAME_WIDTH / 2, GAME_HEIGHT / 2);
 
+        // Re-read every pass, not once at attach: rotating a phone moves the
+        // notch to a different edge, and the insets swap with it.
+        const insets = readInsets(this.parent);
+        const safeArea = safeAreaRect(insets, scale, GAME_WIDTH, GAME_HEIGHT);
+
         // Map the design center onto the viewport center.
         const offsetX = width / 2 - (GAME_WIDTH / 2) * scale;
         const offsetY = height / 2 - (GAME_HEIGHT / 2) * scale;
@@ -177,7 +189,7 @@ export class Responsive extends EventEmitter<ResponsiveEvents> {
         const orientation = orientationOf(width, height);
         const breakpoint = classifyBreakpoint(width, height, BREAKPOINTS);
 
-        this.metrics = { width, height, scale, visible, visibleBounds, orientation, breakpoint };
+        this.metrics = { width, height, scale, visible, visibleBounds, safeArea, orientation, breakpoint };
 
         this.emit('resize', this.metrics);
         if (breakpoint !== this.lastBreakpoint) {

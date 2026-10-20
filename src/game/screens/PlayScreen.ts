@@ -71,6 +71,23 @@ const SWEEP_FLASH_PEAK = 0.25;
 /** How far a sweep's ring reaches — past the last hole on the widest layout. */
 const SWEEP_RING_MS = 380;
 /**
+ * How far below their hole the sweep's `+20`s float.
+ *
+ * The big "CLEAR!" is drawn at the golden's own hole, one hole-height up; at the
+ * default height a swept capy's score lands on top of it and the two read as one
+ * illegible smear. Dropping them a whole hole further keeps the word the
+ * headline and the scores the trailing detail.
+ */
+const SWEEP_POPUP_DROP = 96;
+/**
+ * How far the "CLEAR!" headline rides above the popup lane.
+ *
+ * Enough to clear the golden's own `+N`, which `apply` draws at the standard
+ * height before this runs. The headline is the biggest text in the game, so it
+ * needs the most room.
+ */
+const CLEAR_TITLE_LIFT = 58;
+/**
  * The kick a combo milestone gives the playfield.
  *
  * Short and small on purpose: hit testing reads the holes' own slots, so the
@@ -461,12 +478,17 @@ export class PlayScreen implements Screen<PlayParams> {
         // The payoff, all in one place: a ring out from the golden, a wash of
         // gold over the whole screen, sparks on everything it caught, and a
         // label loud enough to explain the sudden pile of points.
+        //
+        // The word rides *above* the popup lane, not at it: `apply` has already
+        // drawn the golden's own `+N` at the standard height, and the swept
+        // capys' `+20`s are dropped further still. Three lanes, so the headline,
+        // the tapped payout and the bounties never share a line.
         const { x, y } = resolved.hole.slot;
         this.context?.audio.play(SFX.clear);
         this.addShockwave(x, y);
         this.spray(resolved, SWEEP_BURST);
         this.sweepFlashLeft = SWEEP_FLASH_MS;
-        this.addPopup('CLEAR!', x, y - HOLE_RADIUS - 46, COLORS.star, 56);
+        this.addPopup('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
 
         for (const capy of [...this.capys]) {
             if (capy === resolved || !capy.emerge.hittable) continue;
@@ -478,7 +500,7 @@ export class PlayScreen implements Screen<PlayParams> {
             }
 
             this.spray(capy, SOFT_BURST);
-            this.payBounty(capy, SWEEP_POINTS);
+            this.payBounty(capy, SWEEP_POINTS, SWEEP_POPUP_DROP);
             capy.emerge.retreat();
         }
     }
@@ -523,10 +545,14 @@ export class PlayScreen implements Screen<PlayParams> {
     /**
      * Bank points without touching the combo or the tally — a bounty, not a
      * tap. The one place score and popup stay in step for every payment.
+     *
+     * `popupDrop` pushes the label further down from its hole, which the sweep
+     * uses: its per-capy `+20`s are a trailing detail behind the big "CLEAR!",
+     * and at the default height they would be drawn straight through it.
      */
-    private payBounty(capy: Capy, points: number): void {
+    private payBounty(capy: Capy, points: number, popupDrop = 0): void {
         this.score.add(points);
-        this.spawnPopup(capy, points);
+        this.spawnPopup(capy, points, popupDrop);
         this.updateHud();
     }
 
@@ -629,20 +655,29 @@ export class PlayScreen implements Screen<PlayParams> {
     // --- HUD ----------------------------------------------------------------
 
     private createHud(ui: Container, responsive: Responsive): void {
+        // Nudge the whole top row clear of a notched phone's Dynamic Island. The
+        // safe area is in design units already, and clamped to the design box,
+        // so this can only ever move the row down — never off the top.
+        const rowY = Math.max(HUD_ROW_Y, responsive.safeArea.y + HUD_ROW_Y * 0.6);
+
         this.scoreLabel = createLabel('0', { fontSize: 52 });
         this.scoreLabel.anchor.set(0, 0.5);
-        this.scoreLabel.position.set(56, HUD_ROW_Y);
+        this.scoreLabel.position.set(56, rowY);
         ui.addChild(this.scoreLabel);
 
         this.timerLabel = createLabel('0', { fontSize: 52 });
         this.timerLabel.anchor.set(0.5, 0.5);
-        this.timerLabel.position.set(SCREEN_CENTER.x, HUD_ROW_Y);
+        this.timerLabel.position.set(SCREEN_CENTER.x, rowY);
         this.timerLabel.visible = false;
         ui.addChild(this.timerLabel);
 
+        // The combo line follows the row it hangs from, so the two cannot drift
+        // apart on a device that pushes the HUD down.
+        const comboY = COMBO_Y + (rowY - HUD_ROW_Y);
+
         this.comboLabel = createLabel('', { fontSize: 26, fill: COLORS.star });
         this.comboLabel.anchor.set(0.5, 0.5);
-        this.comboLabel.position.set(SCREEN_CENTER.x, COMBO_Y);
+        this.comboLabel.position.set(SCREEN_CENTER.x, comboY);
         ui.addChild(this.comboLabel);
 
         // The milestone's shout: the combo line's own spot, so the ladder's
@@ -655,7 +690,7 @@ export class PlayScreen implements Screen<PlayParams> {
             stroke: { width: 5 },
         });
         this.comboWord.anchor.set(0.5, 0.5);
-        this.comboWord.position.set(SCREEN_CENTER.x, COMBO_Y);
+        this.comboWord.position.set(SCREEN_CENTER.x, comboY);
         this.comboWord.visible = false;
         ui.addChild(this.comboWord);
 
@@ -665,7 +700,7 @@ export class PlayScreen implements Screen<PlayParams> {
         ui.addChild(this.promptLabel);
 
         const pause = createButton('II', () => this.togglePause(), { width: 84, height: 62, fontSize: 26 });
-        pause.position.set(GAME_WIDTH - 72, HUD_ROW_Y);
+        pause.position.set(GAME_WIDTH - 72, rowY);
         ui.addChild(pause);
 
         // The golden's wash, invisible until a sweep fires it. Added before the
@@ -798,11 +833,11 @@ export class PlayScreen implements Screen<PlayParams> {
         this.shockwaves.push(wave);
     }
 
-    private spawnPopup(capy: Capy, points: number): void {
+    private spawnPopup(capy: Capy, points: number, drop = 0): void {
         this.addPopup(
             `${points >= 0 ? '+' : ''}${points}`,
             capy.hole.slot.x,
-            capy.hole.slot.y - HOLE_RADIUS - 46,
+            capy.hole.slot.y - HOLE_RADIUS - 46 + drop,
             points >= 0 ? COLORS.star : COLORS.hazard,
         );
     }
