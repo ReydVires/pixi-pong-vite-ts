@@ -89,9 +89,8 @@ const NAME_Y = 64;
 const WISH_Y = 128;
 /** The line under the present: the "tap it" hint, then the wish — never both. */
 const LOWER_TEXT_Y = 700;
-/** Where the screen's primary button sits, and the way out below it. */
+/** Where the screen's primary button sits. */
 const PRIMARY_Y = 860;
-const MENU_Y = 950;
 
 /** The present's art, and where its top edge sits in the gift's own space. */
 interface GiftArt {
@@ -108,8 +107,8 @@ interface GiftArt {
 /**
  * The birthday reveal.
  *
- * The last stage's Results sends the player here through a button that looks
- * exactly like every other stage's "Next", so the present arrives as a
+ * The last stage's results panel sends the player here through a button that
+ * looks exactly like every other stage's "Next", so the present arrives as a
  * surprise. Fireworks play over the night sky the whole time, the present drops
  * in and waits to be tapped, and opening it is what shows the wish.
  *
@@ -153,7 +152,7 @@ export class CelebrationScreen implements Screen {
     private opened = false;
 
     async init(context: ScreenContext, _params: void): Promise<void> {
-        const { world, ui, assets, screens, responsive } = context;
+        const { world, ui, assets, responsive } = context;
         this.context = context;
         this.uiLayer = ui;
 
@@ -181,15 +180,6 @@ export class CelebrationScreen implements Screen {
         ui.addChild(this.hint);
 
         this.buildWish();
-
-        // The way out is always on screen: the surprise should never be a trap
-        // for someone who does not realise the box is the thing to touch.
-        const menu = createSceneButton('Menu', () => {
-            this.context?.audio.play(SFX.tap);
-            void screens.start(SCREENS.MainMenu);
-        });
-        menu.position.set(SCREEN_CENTER.x, MENU_Y);
-        ui.addChild(menu);
 
         // Staggered from the first frame, then random from there.
         this.scheduleFirework();
@@ -511,8 +501,8 @@ export class CelebrationScreen implements Screen {
         wish.addChild(message);
 
         // The letter was the promise the present made; the button now keeps it.
-        // Still the accent: the payoff is reading it, and `Menu` is still on
-        // screen for anyone who would rather not.
+        // With `Menu` gone from this screen it is the only control here, so it
+        // takes the accent — opening it is also how the player eventually leaves.
         const letter = createSceneButton('Read the letter', () => {
             this.context?.audio.play(SFX.tap);
             void this.context?.screens.start(SCREENS.Letter);

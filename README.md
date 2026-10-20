@@ -19,7 +19,7 @@ loading, sound, pointer input, and responsive scaling — so you can focus on ma
 - 🔤 **Bundled web font** (Titan One) loaded before any text, so labels look identical everywhere
 - 👆 **Pointer input** scoped to a screen, cleaned up automatically
 - ⌨️ **Keyboard input** scoped to a screen (`isDown` polling + `onKeyDown` events)
-- ⏸️ **Pause pattern** — ESC freezes gameplay and shows an overlay with Resume/Exit
+- ⏸️ **Modal overlays** — pause and end-of-stage panels over a frozen playfield (not new screens)
 - ⚡ An **instant HTML splash** while the Pixi engine downloads as a separate async chunk
 - 🧪 A **dev handle** (`window.game`) so you can poke at the running game from the console
 
@@ -57,7 +57,8 @@ If you're new, do these in order:
    (Whack-a-Capy: capys pop out of a honeycomb of holes, tap them before they duck back).
    Change the prompt text in `src/game/levels/stages.ts`, save, and watch it update live.
 3. **Understand the flow.** The game boots in `src/main.ts` → `Game.ts` → the `Preloader`
-   screen → `MainMenu` → `Play` → `Results`. Tap anywhere to advance between them.
+   screen → `MainMenu` → `Play`. Stages chain through `Play`; the last one opens the
+   `Celebration`. Tap anywhere to advance between them.
 4. **Read one screen top to bottom.** `MainMenuScreen.ts` is the best example — it draws a
    background, adds a spinning logo, shows text, and reacts to a tap and to resizing.
 5. **Make a change.** Follow a recipe in the **[Cookbook](#cookbook-common-tasks)** — e.g.
@@ -74,7 +75,7 @@ index.html .................... paints the loading splash instantly (no JS requi
                ├── AudioManager .. synthesised sound, volume + mute (no files)
                ├── Responsive .... fits the canvas to the screen, world/ui layers
                └── ScreenManager . owns the active screen and transitions
-                     └── Preloader → MainMenu → Play → Results
+                     └── Preloader → MainMenu → Play → Celebration
 ```
 
 Everything long-lived is created once in `Game.ts`. Screens are created and destroyed as you
@@ -119,7 +120,7 @@ src/
     │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
     │   ├── audio/              AudioManager + synth — sound, with no files to ship
-    │   ├── display/            Building blocks: Background, Button, SceneButton, Image, Label, ProgressBar, SoundToggle
+    │   ├── display/            Building blocks: Background, Button, SceneButton, Image, Label, Overlay, ProgressBar, SoundToggle
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
     │   └── entities/           Entity + Component — composable per-frame behaviors
@@ -133,7 +134,6 @@ src/
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
         ├── MainMenuScreen.ts   Title screen (entity + Spin component demo + sound toggle)
         ├── PlayScreen.ts       The game itself — runs one stage (Whack-a-Capy)
-        ├── ResultsScreen.ts    Post-stage summary: stars, score, Replay / Next / Menu
         ├── CelebrationScreen.ts  The finale: a present to open
         └── LetterScreen.ts     The letter the present promised
 ```
@@ -183,16 +183,14 @@ containers and listeners before building the next one, and only ticks the active
 factory and `init()`. Declare the payload type on the screen that receives it:
 
 ```ts
-// The receiving screen declares what it expects (see ResultsScreen.ts):
-export interface ResultsParams {
+// The receiving screen declares what it expects (see PlayScreen.ts):
+export interface PlayParams {
     stageId: string;
-    score: number;
-    stars: number;
 }
 
-export class ResultsScreen implements Screen<ResultsParams> {
-    init({ ui }: ScreenContext, params: ResultsParams): void {
-        const score = createLabel(`${params.score}`);
+export class PlayScreen implements Screen<PlayParams> {
+    init({ ui }: ScreenContext, params: PlayParams): void {
+        const stage = findStage(params.stageId);
         // ...
     }
 }
@@ -200,13 +198,43 @@ export class ResultsScreen implements Screen<ResultsParams> {
 
 ```ts
 // The sending screen passes it at transition time (see PlayScreen.finish()):
-void screens.start(SCREENS.Results, { stageId: 'stage-1', score: 240, stars: 2 });
+void screens.start(SCREENS.Play, { stageId: 'stage-2' });
 ```
 
 Screens that don't need data simply use the default `Screen` (i.e. `Screen<void>`) and ignore
 the param. Note that `params` is **per-transition** — it exists only while the screen is
 active. For state that must outlive screens (settings, totals), create a small store in
 `Game.ts` and reach it through the `ScreenContext` instead.
+
+### Modals that aren't screens
+
+Sometimes a screen needs to *interrupt* itself — pause mid-run, show results when a stage
+ends — without tearing down and rebuilding everything on screen. A separate `Screen` can't do
+that: transitioning destroys the outgoing screen and every object in it, and you'd lose the
+frozen playfield you wanted to keep behind the panel.
+
+Use `createOverlay()` (`core/display/overlay.ts`) instead. It's a display object, not a screen:
+no lifecycle, no state — the caller decides when it's visible. It dims everything behind it and
+swallows input, so the playfield can't take hits through it.
+
+```ts
+import { createOverlay } from '../core/display/overlay';
+
+const overlay = createOverlay(responsive, {
+    title: 'Stage 2 complete',
+    figure: this.createStars(2),          // optional graphic (e.g. a star row)
+    lines: ['420', 'Accuracy 92%   ·   Best Combo 11'],
+    actions: [
+        { label: 'Next', onTap: () => screens.start(SCREENS.Play, { stageId: 'stage-3' }) },
+        { label: 'Replay', onTap: () => screens.start(SCREENS.Play, { stageId: 'stage-2' }) },
+        { label: 'Menu', onTap: () => screens.start(SCREENS.MainMenu) },
+    ],
+    onAction: () => audio.play(SFX.tap),
+});
+```
+
+`PlayScreen` uses this for both the pause menu and the end-of-stage results panel. Mount
+overlays in a container added *last* to `ui`, so a modal is never buried under HUD chrome.
 
 ### 2. `world` vs `ui` (and `Responsive`)
 
@@ -481,12 +509,20 @@ manager cannot clean them up for you.
 
 ### Pause the game (ESC + overlay)
 
-The pattern used by `PlayScreen`: a hidden overlay container in `ui`, ESC
-toggles it, and `update()` returns early while paused so gameplay freezes:
+The pattern used by `PlayScreen`: a hidden overlay built with `createOverlay()` in `ui`,
+ESC toggles it, and `update()` returns early while paused so gameplay freezes:
 
 ```ts
-init({ ui, keyboard }: ScreenContext): void {
-    this.pauseOverlay = this.createPauseOverlay(); // dim + Resume/Exit buttons
+import { createOverlay } from '../core/display/overlay';
+
+init({ ui, keyboard, responsive }: ScreenContext): void {
+    this.pauseOverlay = createOverlay(responsive, {
+        title: 'Paused',
+        actions: [
+            { label: 'Resume', onTap: () => this.togglePause() },
+            { label: 'Quit to Menu', onTap: () => screens.start(SCREENS.MainMenu) },
+        ],
+    });
     this.pauseOverlay.visible = false;
     ui.addChild(this.pauseOverlay);
     this.stopKey = keyboard.onKeyDown('Escape', () => this.togglePause());
@@ -503,10 +539,13 @@ togglePause(): void {
 }
 ```
 
-Buttons in the overlay are plain containers with `eventMode = 'static'` and a
-`pointerdown` handler — the shared `createButton()` helper in
-`core/display/Button.ts` builds both for you. "Quit to Menu" simply
-calls `screens.start(SCREENS.MainMenu)`.
+`createOverlay()` (in `core/display/overlay.ts`) draws a full-bleed dim that spans the whole
+visible area — not just the design rect, so letterbox margins are covered — and swallows taps
+aimed at the playfield behind it. It lays out the title, an optional `figure` (a graphic such as
+a row of stars), the detail `lines`, and the `actions` (buttons) in one flow, so they can't
+collide. The first action is styled as the primary. Pass `onAction` to play a click sound.
+
+See also **[Modals that aren't screens](#modals-that-arent-screens)** below.
 
 ### Animate something every frame
 

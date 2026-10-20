@@ -82,7 +82,7 @@ export interface StageDef {
     /** Present ⇒ the stage is scripted instead of randomly spawned. */
     tutorial?: readonly TutorialStep[];
     /**
-     * Marks this stage's Results button as the one that reveals the celebration.
+     * Marks this stage's results button as the one that reveals the celebration.
      *
      * The last stage is the finale by default, so appending a stage carries the
      * ending along with it; setting this replaces that default outright. Only

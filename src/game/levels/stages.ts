@@ -153,7 +153,7 @@ export function findNextStage(id: string): StageDef | null {
 }
 
 /**
- * The stage whose Results screen reveals the celebration.
+ * The stage whose results panel reveals the celebration.
  *
  * The bottom of the table is the ending by default, so appending a stage to
  * `STAGES` carries the finale along with it and nothing has to be remembered.

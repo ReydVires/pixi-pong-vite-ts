@@ -1,5 +1,5 @@
-import { Container } from 'pixi.js';
-import type { Graphics, Text } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
+import type { Text } from 'pixi.js';
 import { SFX } from '../audio/sfx';
 import { Burst } from '../components/Burst';
 import { Shockwave } from '../components/Shockwave';
@@ -7,6 +7,8 @@ import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { createButton } from '../core/display/button';
 import { createLabel } from '../core/display/label';
+import { createOverlay } from '../core/display/overlay';
+import type { OverlayAction } from '../core/display/overlay';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import { holeSlots } from '../core/layout/hexLayout';
 import type { Responsive } from '../core/responsive/Responsive';
@@ -14,15 +16,15 @@ import type { Screen, ScreenContext } from '../core/screens/screen';
 import { Hole } from '../entities/Hole';
 import { Capy } from '../entities/Capy';
 import { CAPY_TYPES } from '../levels/capyTypes';
-import { findStage } from '../levels/stages';
+import { findNextStage, findStage, isFinaleStage } from '../levels/stages';
 import type { CapyTypeId, StageDef, TutorialStep } from '../levels/types';
+import { canAdvance } from '../systems/ScoreKeeper';
 import { ComboTracker } from '../systems/ComboTracker';
 import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
 import type { TapOutcome } from '../systems/ScoreKeeper';
 import { pickSpawn, Spawner } from '../systems/Spawner';
 import type { BurstOptions } from '../systems/particles';
 import { SessionClock, secondsRemaining } from '../systems/SessionClock';
-import type { ResultsParams } from './ResultsScreen';
 
 /** Centre of the honeycomb in design units — leaves room for HUD and prompt. */
 const GRID_CENTER_Y = 560;
@@ -87,6 +89,10 @@ const SWEEP_POPUP_DROP = 96;
  * needs the most room.
  */
 const CLEAR_TITLE_LIFT = 58;
+
+/** Star row of the results panel: outer/inner radius of one point. */
+const STAR_OUTER = 30;
+const STAR_INNER = 13;
 /**
  * The kick a combo milestone gives the playfield.
  *
@@ -196,6 +202,11 @@ export class PlayScreen implements Screen<PlayParams> {
     private timerLabel: Text | null = null;
     private promptLabel: Text | null = null;
     private pauseOverlay: Container | null = null;
+    /**
+     * Top of the UI stack: overlays mount here, so they sit above the HUD and
+     * the sweep wash no matter what order the HUD was built in.
+     */
+    private hudLayer: Container | null = null;
 
     private stopTap: Unsubscribe | null = null;
     private stopPauseKey: Unsubscribe | null = null;
@@ -629,8 +640,12 @@ export class PlayScreen implements Screen<PlayParams> {
     // --- Stage end ----------------------------------------------------------
 
     /**
-     * End the stage. Every path — beating it *or* running out of clock — goes
-     * through Results, so the player always sees score, stars and accuracy.
+     * End the stage, in place.
+     *
+     * The run is over but the screen is not: results are a modal over the frozen
+     * playfield, so the last frame of the stage stays visible behind the panel
+     * instead of being destroyed for a separate screen. That is why every path
+     * out of a stage — beating it *or* running out of clock — ends here.
      */
     private finish(): void {
         const stage = this.stage;
@@ -638,18 +653,78 @@ export class PlayScreen implements Screen<PlayParams> {
         this.finished = true;
 
         const attempts = this.hits + this.misses;
-        const results: ResultsParams = {
-            stageId: stage.id,
-            score: this.score.score,
-            hits: this.hits,
-            misses: this.misses,
-            accuracy: attempts > 0 ? this.hits / attempts : 0,
-            bestCombo: this.combo.bestCount,
-            stars: starsFor(this.score.score, stage.starThresholds),
-        };
+        const accuracy = attempts > 0 ? this.hits / attempts : 0;
+        const stars = starsFor(this.score.score, stage.starThresholds);
+        const next = findNextStage(stage.id);
 
-        // Results owns what comes next: the next stage, or the celebration.
-        void this.context?.screens.start(SCREENS.Results, results);
+        // Earn a star to move on. Advance is the reward for engaging with the
+        // stage; coming up empty repeats it rather than dead-ending the run.
+        const advanced = canAdvance(stars);
+
+        // The bottom of the table has no next stage, so its "Next" is the one
+        // that leaves the game: it opens the celebration. Same label, same
+        // colour, same place as every other stage's — the present is not
+        // announced, and the button is the only way out either way.
+        const finale = isFinaleStage(stage.id);
+
+        const actions: OverlayAction[] = [];
+        if (advanced && finale) {
+            actions.push({ label: 'Next', onTap: () => void this.context?.screens.start(SCREENS.Celebration) });
+        } else if (advanced && next) {
+            actions.push({ label: 'Next', onTap: () => void this.context?.screens.start(SCREENS.Play, { stageId: next.id }) });
+        }
+        // Replay restarts the same stage without leaving it: a fresh PlayScreen
+        // is the cleanest reset, since the old one has a frozen field to unwind.
+        actions.push({ label: 'Replay', onTap: () => void this.context?.screens.start(SCREENS.Play, { stageId: stage.id }) });
+        actions.push({ label: 'Menu', onTap: () => void this.context?.screens.start(SCREENS.MainMenu) });
+
+        const lines = [
+            `${this.score.score}`,
+            `Accuracy ${Math.round(accuracy * 100)}%   ·   Best Combo ${this.combo.bestCount}`,
+        ];
+        if (!advanced) {
+            lines.push(`Score ${stage.starThresholds[0]} to earn a star and continue`);
+        }
+
+        const overlay = createOverlay(this.context!.responsive, {
+            label: 'results-overlay',
+            title: `${stage.title} complete`,
+            // A row of stars, drawn where the panel's flow wants it, rather than
+            // at a fixed offset that could collide with the title or the lines.
+            figure: this.createStars(stars),
+            lines,
+            actions,
+            onAction: () => this.context?.audio.play(SFX.tap),
+        });
+
+        this.hudLayer?.addChild(overlay);
+    }
+
+    /** A row of three stars, filled according to how well the stage went. */
+    private createStars(earned: number): Container {
+        const row = new Container();
+
+        for (let i = 0; i < 3; i++) {
+            const star = this.createStar(i < earned);
+            star.position.set((i - 1) * 84, 0);
+            row.addChild(star);
+        }
+
+        return row;
+    }
+
+    private createStar(filled: boolean): Graphics {
+        const points: number[] = [];
+        for (let i = 0; i < 10; i++) {
+            const angle = (Math.PI / 5) * i - Math.PI / 2;
+            const radius = i % 2 === 0 ? STAR_OUTER : STAR_INNER;
+            points.push(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        }
+
+        return new Graphics()
+            .poly(points, true)
+            .fill(filled ? COLORS.star : 0x3a3f4b)
+            .stroke({ width: 3, color: COLORS.black });
     }
 
     // --- HUD ----------------------------------------------------------------
@@ -710,47 +785,44 @@ export class PlayScreen implements Screen<PlayParams> {
         this.sweepFlash.alpha = 0;
         ui.addChild(this.sweepFlash);
 
-        this.pauseOverlay = this.createPauseOverlay(responsive);
+        this.pauseOverlay = createOverlay(responsive, {
+            label: 'pause-overlay',
+            title: 'Paused',
+            actions: [
+                { label: 'Resume', onTap: () => this.togglePause() },
+                {
+                    label: 'Quit to Menu',
+                    onTap: () => {
+                        // Leave paused state behind: the screen is about to be
+                        // torn down, and a stale `true` would pause the next one.
+                        this.paused = false;
+                        void this.context?.screens.start(SCREENS.MainMenu);
+                    },
+                },
+            ],
+            onAction: () => this.context?.audio.play(SFX.tap),
+        });
         this.pauseOverlay.visible = false;
-        ui.addChild(this.pauseOverlay);
+
+        // Overlays live above everything else in the UI, so a modal is never
+        // buried under HUD chrome or the sweep wash.
+        this.hudLayer = new Container();
+        this.hudLayer.label = 'overlays';
+        ui.addChild(this.hudLayer);
+        this.hudLayer.addChild(this.pauseOverlay);
     }
 
-    private createPauseOverlay(responsive: Responsive): Container {
-        const overlay = new Container();
-
-        // Full-bleed dim over the *visible* area, not the design rect — the
-        // design rect is contain-scaled, so a fixed 768x1024 dim leaves the
-        // letterbox margins (left/right in landscape, above/below in portrait)
-        // uncovered and gameplay still visible outside the overlay.
-        const dim = createColorBackground(COLORS.black, responsive, 0.65);
-        dim.eventMode = 'static'; // swallow taps meant for the playfield
-        overlay.addChild(dim);
-
-        const title = createLabel('Paused', { fontSize: 64 });
-        title.anchor.set(0.5);
-        title.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 140);
-        overlay.addChild(title);
-
-        const resume = createButton('Resume', () => this.togglePause());
-        resume.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y);
-        overlay.addChild(resume);
-
-        const quit = createButton(
-            'Quit to Menu',
-            () => {
-                this.context?.audio.play(SFX.tap);
-                this.paused = false;
-                void this.context?.screens.start(SCREENS.MainMenu);
-            },
-            { fill: 0x3a3f4b },
-        );
-        quit.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 110);
-        overlay.addChild(quit);
-
-        return overlay;
-    }
-
+    /**
+     * Pause or resume the run.
+     *
+     * Refuses once the stage is over: the results panel is already up, so there
+     * is no run left to freeze and a pause overlay behind it would be stranded
+     * state — ESC would leave the player looking at two modals, and the pause
+     * button would reopen a menu the run has left behind.
+     */
     private togglePause(): void {
+        if (this.finished) return;
+
         this.paused = !this.paused;
         // One click covers pause, resume and the ESC key, which are the same
         // action as far as the player is concerned.

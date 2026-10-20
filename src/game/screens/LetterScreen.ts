@@ -15,8 +15,8 @@ const BODY_WIDTH = 600;
 /** Baseline-to-baseline gap between two lines, and the gap a blank line gets. */
 const LINE_GAP = 54;
 const BLANK_GAP = 28;
-/** The way back, kept clear of the last line. */
-const BACK_Y = 900;
+/** The way out, kept clear of the last line. */
+const MENU_Y = 900;
 /** Fade up from black as the screen arrives, in ms. */
 const FADE_IN_MS = 650;
 
@@ -27,8 +27,8 @@ const FADE_IN_MS = 650;
  * what that button meant. The words live in `CELEBRATION.letter`, so the whole
  * note can be rewritten without touching the layout.
  *
- * `Back` returns to the celebration rather than the menu: the present is still
- * the thing on show, and the letter is a visit, not an exit.
+ * The letter ends at `Menu`, back to the title screen: it is the last thing in
+ * the run, and leaving from here is the natural way out of the game.
  */
 export class LetterScreen implements Screen {
     /** Black sheet the screen fades up from on arrival. */
@@ -70,12 +70,12 @@ export class LetterScreen implements Screen {
             y += LINE_GAP;
         }
 
-        const back = createSceneButton('Back', () => {
+        const menu = createSceneButton('Menu', () => {
             context.audio.play(SFX.tap);
             void screens.start(SCREENS.MainMenu);
         });
-        back.position.set(SCREEN_CENTER.x, BACK_Y);
-        ui.addChild(back);
+        menu.position.set(SCREEN_CENTER.x, MENU_Y);
+        ui.addChild(menu);
 
         this.veil = createColorBackground(COLORS.black, responsive);
         ui.addChild(this.veil);

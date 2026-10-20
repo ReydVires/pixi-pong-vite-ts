@@ -33,8 +33,6 @@ export const COLORS = {
     pit: 0x140d05,
     /** Primary button and highlight. */
     accent: 0xff7aa2,
-    /** Results backdrop. */
-    results: 0x2b1a5e,
     /** Stars and bonus points. */
     star: 0xffd166,
     /** Hazards and penalties. */
@@ -48,7 +46,6 @@ export const SCREENS = {
     Preloader: 'Preloader',
     MainMenu: 'MainMenu',
     Play: 'Play',
-    Results: 'Results',
     Celebration: 'Celebration',
     Letter: 'Letter',
 } as const;
