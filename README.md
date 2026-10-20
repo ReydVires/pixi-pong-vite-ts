@@ -1,27 +1,20 @@
-# PixiJS Vite TypeScript Template
+# Whack-a-Capy
 
-A small, batteries-included starter for 2D games built with **[PixiJS 8](https://pixijs.com)**,
-**[TypeScript 5.7](https://www.typescriptlang.org)** and **[Vite 6](https://vitejs.dev)**.
-It gives you the boring-but-important parts already wired up — screen transitions, asset
-loading, sound, pointer input, and responsive scaling — so you can focus on making the game.
+A **Whack-a-Mole**-style arcade game built with **[PixiJS 8](https://pixijs.com)**,
+**[TypeScript 5.7](https://www.typescriptlang.org)** and **[Vite 6](https://vitejs.dev)**. Built on a reusable PixiJS template with a focus on composition, data-driven design, and snappy arcade feel. 
 
-> Never touched a game engine before? Read **[Your first 30 minutes](#your-first-30-minutes)**,
-> then the **[Cookbook](#cookbook-common-tasks)**. You'll be dangerous in no time.
+Tap capys as they pop out of a honeycomb of holes, build up your combo, and don't whack the bombs! Clear stages to earn stars, make your way to the finale, and open the birthday present.
 
 ## What you get out of the box
 
-- 🧩 **Screens** with a clean lifecycle (`init` → `update` → `destroy`) and animated transitions
-- 🖥️ **Responsive scaling** that works on phones, tablets and desktop with no extra effort
-- 🎨 **Two layers** per screen: `world` (gameplay/backdrops) and `ui` (HUD/menus)
-- 📦 **Asset loader** with progress reporting (perfect for a loading bar)
-- 🔊 **Sound with no files to ship** — a Web Audio manager with synthesised effects,
-  volume/mute that persist, and a ready-made toggle
-- 🔤 **Bundled web font** (Titan One) loaded before any text, so labels look identical everywhere
-- 👆 **Pointer input** scoped to a screen, cleaned up automatically
-- ⌨️ **Keyboard input** scoped to a screen (`isDown` polling + `onKeyDown` events)
-- ⏸️ **Modal overlays** — pause and end-of-stage panels over a frozen playfield (not new screens)
-- ⚡ An **instant HTML splash** while the Pixi engine downloads as a separate async chunk
-- 🧪 A **dev handle** (`window.game`) so you can poke at the running game from the console
+- 🎮 **Data-driven gameplay** — stages, capy archetypes and spawn logic live as pure data (`levels/`)
+- 🧠 **Explicit game state** — `PlayScreen` uses a single `PlayMode` (`playing` | `paused` | `finished`) with controlled transitions via `enter()` for predictable state
+- 🎯 **Centralised hit testing** — one pointer handler, honest accuracy accounting
+- 💥 **Juice without noise** — combo milestones kick the field, show comic words, and pitch the ladder up, with no unnecessary particles
+- 🔊 **Procedural audio** — synthesised SFX from `tone()`/`noise()` primitives, no audio files shipped
+- 🎨 **Component-based entities** — `Entity` + `Component` composition rather than deep inheritance
+- 🖥️ **Responsive + safe-area aware** — uniform scaling with notch/home-indicator handling via `viewport.safeArea`
+- 🧩 **Modal overlays** — pause and end-of-stage results panels render over the frozen playfield (not new screens)
 
 ## Quick start
 
@@ -80,6 +73,16 @@ index.html .................... paints the loading splash instantly (no JS requi
 
 Everything long-lived is created once in `Game.ts`. Screens are created and destroyed as you
 move between them.
+
+## High-level architecture
+
+The game follows a **composition + data-driven** design:
+
+- **Screens** own the lifecycle and orchestration for a given UI/game state (Preloader, MainMenu, Play, Celebration, Letter)
+- **Systems** contain pure game rules (timing, scoring, combos, spawning) with no Pixi dependencies — easy to reason about and test
+- **Entities + Components** compose display objects with behaviours (`Hole`, `Capy`, `Emerge`, `HitTarget`, `Spin`, etc.)
+- **Core plumbing** is reusable engine code (screens, input, assets, audio, display, responsive, layout)
+- **Data** (`levels/`, `config.ts`, `audio/sfx.ts`) drives content; code drives behaviour
 
 ## Load time & code splitting
 
