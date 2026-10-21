@@ -2,6 +2,7 @@ import { ASSETS, COLORS, FONTS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import { ProgressBar } from '../core/display/ProgressBar';
 import type { Screen, ScreenContext } from '../core/screens/screen';
+import type { Nullable } from '../core/types';
 
 /**
  * Loads the game's assets behind a progress bar, then hands over to the menu.
@@ -10,7 +11,7 @@ import type { Screen, ScreenContext } from '../core/screens/screen';
  * look while the rest downloads.
  */
 export class PreloaderScreen implements Screen {
-    private bar: ProgressBar | null = null;
+    private bar: Nullable<ProgressBar> = null;
 
     async init(context: ScreenContext, _params: void): Promise<void> {
         const { world, ui, assets, screens, responsive } = context;

@@ -1,3 +1,4 @@
+import type { Nullable } from '../core/types';
 /**
  * Data model for stages and capys.
  *
@@ -68,7 +69,7 @@ export interface StageDef {
     id: string;
     title: string;
     /** Countdown length, or `null` for untimed stages (the tutorial). */
-    durationMs: number | null;
+    durationMs: Nullable<number>;
     /** Hole arrangement. `hex` is the honeycomb default. */
     layout: 'hex' | 'grid';
     /** How many holes to lay out. 1, 7 or 19 fill the honeycomb rings. */

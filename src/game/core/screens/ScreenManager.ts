@@ -9,6 +9,7 @@ import { KeyboardInput } from '../input/KeyboardInput';
 import { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 import type { Unsubscribe } from '../responsive/layout';
+import type { Nullable } from '../types';
 import type { Screen, ScreenContext, ScreenFactory } from './screen';
 
 const TRANSITION_LOADER_DELAY_MS = 160;
@@ -29,15 +30,15 @@ const TRANSITION_LOADER_DELAY_MS = 160;
 export class ScreenManager {
     private readonly factories = new Map<string, ScreenFactory<never>>();
     private readonly stopResize: Unsubscribe;
-    private current: Screen<never> | null = null;
-    private currentWorld: Container | null = null;
-    private currentUi: Container | null = null;
-    private currentInput: PointerInput | null = null;
-    private currentKeyboard: KeyboardInput | null = null;
-    private currentName: string | null = null;
+    private current: Nullable<Screen<never>> = null;
+    private currentWorld: Nullable<Container> = null;
+    private currentUi: Nullable<Container> = null;
+    private currentInput: Nullable<PointerInput> = null;
+    private currentKeyboard: Nullable<KeyboardInput> = null;
+    private currentName: Nullable<string> = null;
     private transitionId = 0;
-    private transitionLoader: Container | null = null;
-    private transitionSpinner: Container | null = null;
+    private transitionLoader: Nullable<Container> = null;
+    private transitionSpinner: Nullable<Container> = null;
 
     constructor(
         private readonly app: Application,
@@ -59,7 +60,7 @@ export class ScreenManager {
     }
 
     /** Key of the currently active screen, if any. */
-    get active(): string | null {
+    get active(): Nullable<string> {
         return this.currentName;
     }
 
@@ -79,7 +80,7 @@ export class ScreenManager {
         const transitionId = ++this.transitionId;
         const result = (factory as ScreenFactory<P | undefined>)(params);
         let screen: Awaited<typeof result>;
-        let loadingDelay: number | null = null;
+        let loadingDelay: Nullable<number> = null;
 
         if (result instanceof Promise) {
             this.app.ticker.remove(this.tick);

@@ -7,6 +7,7 @@ import type { OverlayAction } from '../core/display/overlay';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import { holeSlots } from '../core/layout/hexLayout';
 import type { Screen, ScreenContext } from '../core/screens/screen';
+import type { Nullable } from '../core/types';
 import { PlayHud, HUD_ZONE_Y } from '../ui/PlayHud';
 import { ResultsPanel } from '../ui/ResultsPanel';
 import { Hole } from '../entities/Hole';
@@ -111,15 +112,15 @@ export type PlayMode = 'playing' | 'paused' | 'finished';
  * accuracy accounting honest, which a listener-per-capy would muddy.
  */
 export class PlayScreen implements Screen<PlayParams> {
-    private context: ScreenContext | null = null;
-    private stage: StageDef | null = null;
+    private context: Nullable<ScreenContext> = null;
+    private stage: Nullable<StageDef> = null;
 
     private readonly holes: Hole[] = [];
     private readonly capys: Capy[] = [];
     private readonly pendingRetirement: Capy[] = [];
 
-    private clock: SessionClock | null = null;
-    private spawner: Spawner | null = null;
+    private clock: Nullable<SessionClock> = null;
+    private spawner: Nullable<Spawner> = null;
 
     private readonly scoreKeeper = new ScoreKeeper();
     private readonly combo = new ComboTracker();
@@ -128,7 +129,7 @@ export class PlayScreen implements Screen<PlayParams> {
     private spawned = 0;
 
     /** Scripted-stage progress, when the stage has a script to follow. */
-    private tutorial: TutorialRunner | null = null;
+    private tutorial: Nullable<TutorialRunner> = null;
 
     /**
      * The screen's current mode, as a single stored value.
@@ -158,23 +159,23 @@ export class PlayScreen implements Screen<PlayParams> {
         this.state = next;
     }
 
-    private popups: PopupsSystem | null = null;
-    private effects: EffectsSystem | null = null;
+    private popups: Nullable<PopupsSystem> = null;
+    private effects: Nullable<EffectsSystem> = null;
     /** Everything the playfield is made of, so a milestone can kick all of it. */
-    private field: Entity | null = null;
+    private field: Nullable<Entity> = null;
     /** The field's kick, composed as a component rather than timed by the screen. */
-    private shake: Shake | null = null;
-    private sweepFlash: Graphics | null = null;
+    private shake: Nullable<Shake> = null;
+    private sweepFlash: Nullable<Graphics> = null;
     /** Milliseconds left on the golden's full-screen wash. */
     private sweepFlashLeft = 0;
-    private pauseOverlay: Container | null = null;
+    private pauseOverlay: Nullable<Container> = null;
     /** The HUD: score, countdown, combo line, prompt, pause button — and their animations. */
-    private hud: PlayHud | null = null;
+    private hud: Nullable<PlayHud> = null;
     /** The end-of-stage results panel, mounted when the run ends. */
-    private results: ResultsPanel | null = null;
+    private results: Nullable<ResultsPanel> = null;
 
-    private stopTap: Unsubscribe | null = null;
-    private stopPauseKey: Unsubscribe | null = null;
+    private stopTap: Nullable<Unsubscribe> = null;
+    private stopPauseKey: Nullable<Unsubscribe> = null;
 
     init(context: ScreenContext, params: PlayParams): void {
         const { world, ui, assets, input, keyboard, responsive } = context;
@@ -560,7 +561,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
     // --- Spawning -----------------------------------------------------------
 
-    private pickFreeHole(): Hole | null {
+    private pickFreeHole(): Nullable<Hole> {
         const free = this.holes.filter((hole) => hole.free);
         if (free.length === 0) return null;
         return free[Math.floor(Math.random() * free.length)];

@@ -1,6 +1,7 @@
 import { Graphics } from 'pixi.js';
 import { Emerge } from '../components/Emerge';
 import { Flash } from '../components/Flash';
+import type { Nullable } from '../core/types';
 import { HitTarget } from '../systems/HitTarget';
 import { COLORS } from '../config';
 import { Entity } from '../core/entities/Entity';
@@ -35,7 +36,7 @@ export class Capy extends Entity {
     readonly emerge: Emerge;
 
     /** Set by the screen; fired when the capy finishes sinking away. */
-    onRetreated: (() => void) | null = null;
+    onRetreated: Nullable<() => void> = null;
 
     /**
      * The hole it is standing in — not the one it was built in, because a

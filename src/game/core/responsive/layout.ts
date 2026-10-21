@@ -1,3 +1,4 @@
+import type { Nullable } from '../types';
 /**
  * Pure geometry helpers behind the responsive system.
  *
@@ -120,7 +121,7 @@ export function safeAreaRect(
  * behaviour, so a browser that hides `env()` degrades to the old layout instead
  * of breaking. Returns `NO_INSETS` outside a DOM (e.g. when unit-tested).
  */
-export function readInsets(root: HTMLElement | null): Insets {
+export function readInsets(root: Nullable<HTMLElement>): Insets {
     if (!root || typeof getComputedStyle !== 'function') return NO_INSETS;
 
     const style = getComputedStyle(root);

@@ -1,3 +1,4 @@
+import type { Nullable } from '../core/types';
 import type { TutorialStep } from '../levels/types';
 
 /** What the script asks the caller to do after a frame, if anything. */
@@ -40,7 +41,7 @@ export class TutorialRunner {
      * returns `true` when one was actually placed. An outcome is returned only
      * when something changed — a step boundary — and `null` otherwise.
      */
-    update(dt: number, liveCount: number, spawn: (hold: boolean) => boolean): TutorialOutcome | null {
+    update(dt: number, liveCount: number, spawn: (hold: boolean) => boolean): Nullable<TutorialOutcome> {
         const step = this.steps[this.index];
         // Defensive: the runner only steps past the end through `advance()`,
         // which reports `finished` itself — this simply cannot run past the table.

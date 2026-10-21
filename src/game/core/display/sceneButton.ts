@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { COLORS } from '../../config';
+import type { Nullable } from '../types';
 import { createLabel } from './label';
 
 /** Size of the button, in design px. */
@@ -17,7 +18,7 @@ const SCENE_BUTTON = { width: 320, height: 68 } as const;
  * its place and its looks, but takes no taps rather than silently swallowing
  * them, so a placeholder can never be mistaken for a broken control.
  */
-export function createSceneButton(text: string, onTap: (() => void) | null, accent = false): Container {
+export function createSceneButton(text: string, onTap: Nullable<() => void>, accent = false): Container {
     const { width, height } = SCENE_BUTTON;
     const button = new Container();
 

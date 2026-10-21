@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { COLORS } from '../../config';
+import type { Nullable } from '../types';
 
 export interface ProgressBarOptions {
     /** Total width in px. @default 468 */
@@ -27,7 +28,7 @@ export class ProgressBar {
     private readonly smoothingMs: number;
     private target = 0;
     private value = 0;
-    private settleResolve: (() => void) | null = null;
+    private settleResolve: Nullable<() => void> = null;
     private destroyed = false;
 
     constructor(options: ProgressBarOptions = {}) {

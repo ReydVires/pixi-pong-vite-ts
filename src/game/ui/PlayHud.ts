@@ -4,6 +4,7 @@ import { COLORS, COMBO_WORDS, GAME_WIDTH, SCREEN_CENTER } from '../config';
 import { createButton } from '../core/display/button';
 import { createLabel } from '../core/display/label';
 import type { Responsive } from '../core/responsive/Responsive';
+import type { Nullable } from '../core/types';
 import { Easing, TweenSystem } from '../systems/TweenSystem';
 
 /** Y of the HUD's top row — score, countdown and the pause button share it. */
@@ -75,7 +76,7 @@ export class PlayHud {
     private wordLeft = 0;
 
     /** Top of the UI stack: modals mount here, above chrome and wash alike. */
-    private overlayLayer: Container | null = null;
+    private overlayLayer: Nullable<Container> = null;
 
     constructor(ui: Container, responsive: Responsive, options: PlayHudOptions) {
         this.ui = ui;

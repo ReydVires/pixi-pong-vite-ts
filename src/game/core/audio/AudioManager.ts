@@ -1,4 +1,5 @@
 import { AUDIO_SETTINGS } from '../../config';
+import type { Nullable } from '../types';
 
 /** Per-play overrides. */
 export interface SoundOptions {
@@ -49,9 +50,9 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
  *   `localStorage` and survives a reload.
  */
 export class AudioManager {
-    private ctx: AudioContext | null = null;
-    private master: GainNode | null = null;
-    private sfx: GainNode | null = null;
+    private ctx: Nullable<AudioContext> = null;
+    private master: Nullable<GainNode> = null;
+    private sfx: Nullable<GainNode> = null;
 
     private readonly recipes = new Map<string, SoundRecipe>();
     private readonly buffers = new Map<string, AudioBuffer>();
@@ -93,7 +94,7 @@ export class AudioManager {
     }
 
     /** The live context, or `null` while nothing has needed one. */
-    get context(): AudioContext | null {
+    get context(): Nullable<AudioContext> {
         return this.ctx;
     }
 
@@ -213,7 +214,7 @@ export class AudioManager {
      * A missing or undecodable file warns and resolves to `null`: audio is
      * decoration, and decoration must never be able to break the game.
      */
-    async load(definition: AudioDefinition): Promise<AudioBuffer | null> {
+    async load(definition: AudioDefinition): Promise<Nullable<AudioBuffer>> {
         const ctx = this.ensureContext();
 
         try {

@@ -1,3 +1,4 @@
+import type { Nullable } from '../core/types';
 import type { StageDef } from './types';
 
 /**
@@ -146,7 +147,7 @@ export function findStage(id: string): StageDef {
 }
 
 /** The stage after `id`, or `null` when `id` is the last one. */
-export function findNextStage(id: string): StageDef | null {
+export function findNextStage(id: string): Nullable<StageDef> {
     const index = STAGES.findIndex((candidate) => candidate.id === id);
     if (index === -1 || index + 1 >= STAGES.length) return null;
     return STAGES[index + 1];

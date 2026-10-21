@@ -12,9 +12,9 @@ Tap capys as they pop out of a honeycomb of holes, build up your combo, and don'
 - 🎯 **Centralised hit testing** — one pointer handler, honest accuracy accounting
 - 💥 **Juice without noise** — star-shaped whack bursts, a crowned golden capy, and combo milestones that kick the field and show comic words
 - 🔊 **Procedural audio** — synthesised SFX from `tone()`/`noise()` primitives, no audio files shipped
-- 🎨 **Component-based entities** — `Entity` + `Component` composition rather than deep inheritance
+- 🎨 **Component-based entities** — `Entity` + `Component` composition rather than deep inheritance, and composed UI units (`ui/`) rather than inline display code
 - 🖥️ **Responsive + safe-area aware** — uniform scaling with notch/home-indicator handling via `viewport.safeArea`
-- 🧩 **Modal overlays** — pause and end-of-stage results panels render over the frozen playfield (not new screens)
+- 🧩 **Modal overlays** — the pause overlay and the end-of-stage results panel (`ui/ResultsPanel`) render over the frozen playfield (not new screens)
 
 ## Quick start
 
@@ -50,8 +50,8 @@ If you're new, do these in order:
    (Whack-a-Capy: capys pop out of a honeycomb of holes, tap them before they duck back).
    Change the prompt text in `src/game/levels/stages.ts`, save, and watch it update live.
 3. **Understand the flow.** The game boots in `src/main.ts` → `Game.ts` → the `Preloader`
-   screen → `MainMenu` → `Play`. Stages chain through `Play`; the last one opens the
-   `Celebration`. Tap anywhere to advance between them.
+   screen → `MainMenu` → `Play`. Stages chain through `Play` (each stage's results panel has
+   a *Next*); the last one leads to the `Celebration`, whose present opens the `Letter`.
 4. **Read one screen top to bottom.** `MainMenuScreen.ts` is the best example — it draws a
    background, adds a spinning logo, shows text, and reacts to a tap and to resizing.
 5. **Make a change.** Follow a recipe in the **[Cookbook](#cookbook-common-tasks)** — e.g.
@@ -78,10 +78,11 @@ move between them.
 
 The game follows a **composition + data-driven** design:
 
-- **Screens** own the lifecycle and orchestration for a given UI/game state (Preloader, MainMenu, Play, Celebration, Letter)
-- **Systems** hold reusable logic: pure rules (timing, scoring, combos, spawning) plus focused runtime services such as tweens and Pixi effect lifecycles
-- **Entities + Components** compose display objects with behaviours (`Hole`, `Capy`, `Emerge`, `HitTarget`, `Spin`, etc.)
-- **Core plumbing** is reusable engine code (screens, input, assets, audio, display, responsive, layout)
+- **Screens** (`screens/`) are navigable game states and nothing else — they own the lifecycle and orchestration (Preloader, MainMenu, Play, Celebration, Letter) and keep the *rules*: when a stage ends, what a tap means, which screen comes next
+- **UI units** (`ui/`) are composed presentation pieces a screen mounts and ticks: `PlayHud`, `ResultsPanel`, `WishPanel`. Spec in, callbacks out — they never navigate or score on their own
+- **Systems** (`systems/`) hold reusable logic: pure rules (timing, scoring, combos, spawning, the tutorial) plus focused runtime services such as tweens, particles and Pixi effect lifecycles
+- **Entities + Components** (`entities/`, `components/`) compose display objects with behaviours (`Hole`, `Capy`, `Gift`, `Emerge`, `HitTarget`, `Spin`, `Shake`, etc.)
+- **Core plumbing** (`core/`) is reusable engine code (screens, input, assets, audio, display, responsive, layout)
 - **Data** (`levels/`, `config.ts`, `audio/sfx.ts`) drives content; code drives behaviour
 
 ## Load time & code splitting
@@ -108,8 +109,10 @@ callback and the splash is removed — a seamless hand-off, since the splash bac
   splash could even paint.
 
 The same trick works anywhere: wrap any `import(...)` and that module becomes its own chunk,
-fetched on demand. The finale's `CelebrationScreen` is loaded this way only when the player
-reaches it; its gift art is then requested by the screen's async `init()`.
+fetched on demand. `screens/index.ts` uses it for the two screens carrying most of the game's
+rules — `PlayScreen` (the whole run) and `LetterScreen` (the finale's epilogue) — so neither
+ships in the entry chunk; each arrives the moment the player first needs it. The celebration's
+gift art is likewise requested lazily, by the present actor's own async factory.
 
 ## Project structure
 
@@ -118,23 +121,28 @@ src/
 ├── main.ts                     Entry point — mounts the game on DOMContentLoaded
 └── game/
     ├── Game.ts                 Composition root: creates the app + services, starts first screen
-    ├── config.ts               Resolution, colors, screen keys, asset + audio settings, stages
+    ├── config.ts               Resolution, colors, screen keys, asset + audio settings, celebration data
     ├── core/                   Reusable engine plumbing (you rarely edit this)
     │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
     │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
     │   ├── audio/              AudioManager + synth — sound, with no files to ship
-    │   ├── display/            Building blocks: Background, Button, SceneButton, Image, Label, Overlay, ProgressBar, SoundToggle
+    │   ├── display/            Building blocks: background, button, sceneButton, image, label,
+    │   │                       overlay, ProgressBar, soundToggle, veil
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
     │   └── entities/           Entity + Component — composable per-frame behaviors
     ├── audio/                  sfx — every sound the game makes, by name (data only)
     ├── levels/                 What spawns: capy archetypes + the stage table (data only)
-    ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner, TweenSystem, EffectsSystem
-    ├── components/             Gameplay components (Emerge, HitTarget, Spin, Pulse)
-    ├── entities/               Display objects built from components: Hole, Capy, capyFace
-    └── screens/                The actual game screens  ← most of your work happens here
-        ├── index.ts            Registers every screen with the ScreenManager
+    ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
+    │                           TutorialRunner, TweenSystem, EffectsSystem, FireworksSystem,
+    │                           PopupsSystem, HitTarget + the particles/fireworks math
+    ├── components/             Gameplay components: Emerge, HitTarget, Spin, Pulse, Flash, Shake
+    ├── entities/               Display actors: Hole, Capy, Gift + the capyFace drawing helper
+    ├── ui/                     Composed presentation units a screen mounts and ticks:
+    │                           PlayHud, ResultsPanel, WishPanel
+    └── screens/                The navigable screens — orchestration + rules  ← most of your work happens here
+        ├── index.ts            Registers every screen (Play + Letter load as async chunks)
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
         ├── MainMenuScreen.ts   Title screen (entity + Spin component demo + sound toggle)
         ├── PlayScreen.ts       The game itself — runs one stage (Whack-a-Capy)
@@ -219,29 +227,35 @@ ends — without tearing down and rebuilding everything on screen. A separate `S
 that: transitioning destroys the outgoing screen and every object in it, and you'd lose the
 frozen playfield you wanted to keep behind the panel.
 
-Use `createOverlay()` (`core/display/overlay.ts`) instead. It's a display object, not a screen:
-no lifecycle, no state — the caller decides when it's visible. It dims everything behind it and
-swallows input, so the playfield can't take hits through it.
+Build them as **composed UI units** in `src/game/ui/` and mount them in `ui`: a panel is a
+display object with a spec-in constructor and callbacks out — no lifecycle, no navigation, no
+scoring of its own. The screen stays the one that decides what everything means.
+
+- `PlayHud` mounts the score/timer/combo strip and the pause button. Its
+  `playHud.mountOverlay(node)` appends an overlay layer *last* in `ui`, so a modal is never
+  buried under HUD chrome — `PlayScreen` uses it for the pause overlay.
+- `ResultsPanel` is the end-of-stage panel: `PlayScreen` passes a plain `ResultsSpec` (stage
+  title, stars, hero score, accuracy lines, actions) and owns every rule that fills it in.
+- `WishPanel` is the celebration's reveal — built up front, hidden until the present opens.
+
+Underneath, `createOverlay()` (`core/display/overlay.ts`) is the display object a panel
+usually reaches for: it dims everything behind it and swallows input, so the playfield can't
+take hits through it.
 
 ```ts
 import { createOverlay } from '../core/display/overlay';
 
 const overlay = createOverlay(responsive, {
-    title: 'Stage 2 complete',
-    figure: this.createStars(2),          // optional graphic (e.g. a star row)
-    hero: '420',                          // optional large headline value
-    lines: ['Accuracy 92%   ·   Best Combo 11'],
+    title: 'Paused',
     actions: [
-        { label: 'Next', onTap: () => screens.start(SCREENS.Play, { stageId: 'stage-3' }) },
-        { label: 'Replay', onTap: () => screens.start(SCREENS.Play, { stageId: 'stage-2' }) },
-        { label: 'Menu', onTap: () => screens.start(SCREENS.MainMenu) },
+        { label: 'Resume', onTap: () => this.togglePause() },
+        { label: 'Quit to Menu', onTap: () => screens.start(SCREENS.MainMenu) },
     ],
-    onAction: () => audio.play(SFX.tap),
 });
 ```
 
-`PlayScreen` uses this for both the pause menu and the end-of-stage results panel. Mount
-overlays in a container added *last* to `ui`, so a modal is never buried under HUD chrome.
+Mount overlays in a container added *last* to `ui` — or through `PlayHud.mountOverlay` — so a
+modal is never buried under HUD chrome.
 
 ### 2. `world` vs `ui` (and `Responsive`)
 
@@ -263,7 +277,7 @@ An `Entity` is a display object (a `Container`) that hosts small behaviors calle
 
 ```ts
 import { Entity } from '../core/entities/Entity';
-import { createImage } from '../core/display/Image';
+import { createImage } from '../core/display/image';
 import { Spin } from '../components/Spin';
 
 const logo = new Entity();
@@ -348,7 +362,7 @@ Copy-paste starting points. All snippets assume you're inside a screen's `init(c
 2. Create `src/game/screens/SettingsScreen.ts`:
 
    ```ts
-   import type { Screen, ScreenContext } from '../core/screens/Screen';
+   import type { Screen, ScreenContext } from '../core/screens/screen';
 
    export class SettingsScreen implements Screen {
        init({ ui }: ScreenContext, _params: void): void {
@@ -376,7 +390,7 @@ Copy-paste starting points. All snippets assume you're inside a screen's `init(c
 ### Show an image
 
 ```ts
-import { createImage } from '../core/display/Image';
+import { createImage } from '../core/display/image';
 
 const sprite = createImage(assets.texture(ASSETS.logo), {
     x: SCREEN_CENTER.x,
@@ -388,7 +402,7 @@ ui.addChild(sprite);
 ### Show text
 
 ```ts
-import { createLabel } from '../core/display/Label';
+import { createLabel } from '../core/display/label';
 
 const label = createLabel('Hello!', { fontSize: 48, fill: 0xffcc00 });
 label.anchor.set(0.5);
@@ -714,9 +728,11 @@ is played rather than cached as an image — see **[Add a sound file](#add-a-sou
 
 ## Conventions
 
-- **Keep gameplay in `src/game/screens/`.** `src/game/core/` is engine plumbing — treat it as
-  stable and extend it only when it genuinely helps.
-- **One screen per file**, named `SomethingScreen.ts`, registered in `screens/index.ts`.
+- **Screens are navigable states — nothing else.** New screens go in `src/game/screens/`
+  (`SomethingScreen.ts`, registered in `screens/index.ts`); composed panels and HUDs go in
+  `src/game/ui/` as spec-in/callbacks-out units a screen mounts and ticks. The two never
+  share a directory. `src/game/core/` is engine plumbing — treat it as stable and extend it
+  only when it genuinely helps.
 - **New assets** always go through `config.ts` (`ASSETS`) — never hard-code paths in screens.
 - **New sounds** go through the `SFX` constants in `src/game/audio/sfx.ts` — screens play
   names, never `tone()` / `noise()` directly.

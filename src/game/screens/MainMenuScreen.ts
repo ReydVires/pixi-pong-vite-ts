@@ -12,12 +12,13 @@ import { Entity } from '../core/entities/Entity';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import type { ViewportMetrics } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/screen';
+import type { Nullable } from '../core/types';
 import { FIRST_STAGE_ID } from '../levels/stages';
 
 export class MainMenuScreen implements Screen {
     private readonly entities: Entity[] = [];
-    private stopListening: Unsubscribe | null = null;
-    private info: Text | null = null;
+    private stopListening: Nullable<Unsubscribe> = null;
+    private info: Nullable<Text> = null;
 
     init(context: ScreenContext, _params: void): void {
         const { world, ui, assets, screens, responsive, audio } = context;

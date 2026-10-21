@@ -1,10 +1,11 @@
 import { Text } from 'pixi.js';
 import type { TextStyleOptions } from 'pixi.js';
 import { COLORS, FONT_FAMILY } from '../../config';
+import type { Nullable } from '../types';
 
 /** Text style options, except `stroke` may also be `null` to disable the outline. */
 export interface LabelOptions extends Omit<Partial<TextStyleOptions>, 'stroke'> {
-    stroke?: TextStyleOptions['stroke'] | null;
+    stroke?: Nullable<TextStyleOptions['stroke']>;
 }
 
 /**

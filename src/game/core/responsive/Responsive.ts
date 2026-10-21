@@ -1,6 +1,7 @@
 import { Container, EventEmitter } from 'pixi.js';
 import type { Application, FederatedPointerEvent, Point } from 'pixi.js';
 import { BREAKPOINTS, GAME_HEIGHT, GAME_WIDTH } from '../../config';
+import type { Nullable } from '../types';
 import { centeredRect, classifyBreakpoint, containScale, orientationOf, readInsets, safeAreaRect, visibleSize } from './layout';
 import type { Breakpoint, Orientation, Rect, Size, Unsubscribe } from './layout';
 
@@ -47,9 +48,9 @@ export class Responsive extends EventEmitter<ResponsiveEvents> {
     /** HUD/menu layer, drawn above the world. */
     readonly ui = new Container();
 
-    private parent: HTMLElement | null = null;
-    private metrics: ViewportMetrics | null = null;
-    private lastBreakpoint: Breakpoint | null = null;
+    private parent: Nullable<HTMLElement> = null;
+    private metrics: Nullable<ViewportMetrics> = null;
+    private lastBreakpoint: Nullable<Breakpoint> = null;
     private attached = false;
 
     constructor(private readonly app: Application) {

@@ -1,10 +1,11 @@
-import { Graphics } from 'pixi.js';
 import { SFX } from '../audio/sfx';
 import { CELEBRATION, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground } from '../core/display/background';
 import { createLabel } from '../core/display/label';
 import { createSceneButton } from '../core/display/sceneButton';
+import { ScreenVeil } from '../core/display/veil';
 import type { Screen, ScreenContext } from '../core/screens/screen';
+import type { Nullable } from '../core/types';
 
 /** Vertical rhythm, top to bottom. */
 const TITLE_Y = 190;
@@ -17,8 +18,6 @@ const LINE_GAP = 54;
 const BLANK_GAP = 28;
 /** The way out, kept clear of the last line. */
 const MENU_Y = 900;
-/** Fade up from black as the screen arrives, in ms. */
-const FADE_IN_MS = 650;
 
 /**
  * The birthday letter itself — the present's promise, kept.
@@ -32,7 +31,7 @@ const FADE_IN_MS = 650;
  */
 export class LetterScreen implements Screen {
     /** Black sheet the screen fades up from on arrival. */
-    private veil: Graphics | null = null;
+    private veil: Nullable<ScreenVeil> = null;
 
     init(context: ScreenContext, _params: void): void {
         const { world, ui, screens, responsive } = context;
@@ -77,19 +76,11 @@ export class LetterScreen implements Screen {
         menu.position.set(SCREEN_CENTER.x, MENU_Y);
         ui.addChild(menu);
 
-        this.veil = createColorBackground(COLORS.black, responsive);
-        ui.addChild(this.veil);
+        this.veil = new ScreenVeil(ui, responsive);
     }
 
     update(dt: number): void {
-        const veil = this.veil;
-        if (!veil) return;
-
-        veil.alpha = Math.max(0, veil.alpha - dt / FADE_IN_MS);
-        if (veil.alpha === 0) {
-            veil.destroy();
-            this.veil = null;
-        }
+        if (this.veil?.update(dt)) this.veil = null;
     }
 
     destroy(): void {
