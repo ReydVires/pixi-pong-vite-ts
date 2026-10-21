@@ -65,4 +65,4 @@ export interface Screen<P = void> {
     destroy?(): void;
 }
 
-export type ScreenFactory<P = void> = (params: P) => Screen<P>;
+export type ScreenFactory<P = void> = (params: P) => Screen<P> | Promise<Screen<P>>;

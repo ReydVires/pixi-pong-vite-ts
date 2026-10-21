@@ -108,7 +108,8 @@ callback and the splash is removed — a seamless hand-off, since the splash bac
   splash could even paint.
 
 The same trick works anywhere: wrap any `import(...)` and that module becomes its own chunk,
-fetched on demand.
+fetched on demand. The finale's `CelebrationScreen` is loaded this way only when the player
+reaches it; its gift art is then requested by the screen's async `init()`.
 
 ## Project structure
 
@@ -178,7 +179,9 @@ The `ScreenContext` passed to `init()` is your toolbox:
 | `app`         | The raw Pixi `Application`, if you need the renderer/ticker directly  |
 
 `ScreenManager` handles the transition details for you: it destroys the outgoing screen's
-containers and listeners before building the next one, and only ticks the active screen.
+containers and listeners before building the next one, and only ticks the active screen. Async
+screen factories are awaited; if loading takes longer than a brief delay, a blocking loading
+overlay appears and remains until the new screen's async `init()` completes.
 
 ### Passing data between screens
 

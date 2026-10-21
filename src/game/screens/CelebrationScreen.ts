@@ -191,6 +191,8 @@ export class CelebrationScreen implements Screen {
     }
 
     update(dt: number): void {
+        if (!this.gift) return;
+
         this.pending -= dt;
         if (this.pending <= 0) {
             this.throwBurst(this.firework.color, this.firework.x, this.firework.y, FIREWORK_BURST);

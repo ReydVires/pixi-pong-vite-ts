@@ -1,12 +1,17 @@
-import { Container, Ticker } from 'pixi.js';
+import { Container, Graphics, Ticker } from 'pixi.js';
 import type { Application } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader';
 import type { AudioManager } from '../audio/AudioManager';
+import { COLORS, SCREEN_CENTER } from '../../config';
+import { createColorBackground } from '../display/background';
+import { createLabel } from '../display/label';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 import type { Unsubscribe } from '../responsive/layout';
 import type { Screen, ScreenContext, ScreenFactory } from './screen';
+
+const TRANSITION_LOADER_DELAY_MS = 160;
 
 /**
  * Owns the lifecycle of screens: registration, transitions, teardown
@@ -30,6 +35,9 @@ export class ScreenManager {
     private currentInput: PointerInput | null = null;
     private currentKeyboard: KeyboardInput | null = null;
     private currentName: string | null = null;
+    private transitionId = 0;
+    private transitionLoader: Container | null = null;
+    private transitionSpinner: Container | null = null;
 
     constructor(
         private readonly app: Application,
@@ -56,11 +64,11 @@ export class ScreenManager {
     }
 
     /**
-     * Transition to a screen: tear down the current one, then `init()` the next.
+     * Resolve the next screen, tear down the current one, then `init()` the next.
      * `params` is handed to the new screen's factory and `init()` — use it to
      * carry data across the transition (e.g. the final score).
-     * If a newer transition starts while `init()` is still awaiting, the older
-     * screen is abandoned and never activated.
+     * If a newer transition starts while its factory is awaiting, the older
+     * request is abandoned and never activated.
      */
     async start<P>(name: string, params?: P): Promise<void> {
         const factory = this.factories.get(name);
@@ -68,6 +76,37 @@ export class ScreenManager {
             throw new Error(`Unknown screen "${name}". Did you register it in registerScreens()?`);
         }
 
+        const transitionId = ++this.transitionId;
+        const result = (factory as ScreenFactory<P | undefined>)(params);
+        let screen: Awaited<typeof result>;
+        let loadingDelay: number | null = null;
+
+        if (result instanceof Promise) {
+            this.app.ticker.remove(this.tick);
+            loadingDelay = window.setTimeout(() => {
+                if (this.transitionId === transitionId) this.showTransitionLoader(name);
+            }, TRANSITION_LOADER_DELAY_MS);
+
+            try {
+                screen = await result;
+            } catch (error) {
+                window.clearTimeout(loadingDelay);
+                if (this.transitionId === transitionId) {
+                    this.hideTransitionLoader();
+                    if (this.current) this.app.ticker.add(this.tick);
+                }
+                throw error;
+            }
+        } else {
+            screen = result;
+        }
+
+        if (transitionId !== this.transitionId) {
+            if (loadingDelay !== null) window.clearTimeout(loadingDelay);
+            return;
+        }
+
+        if (loadingDelay === null) this.hideTransitionLoader();
         this.disposeCurrent();
 
         const world = new Container();
@@ -81,8 +120,7 @@ export class ScreenManager {
         const input = new PointerInput(world, this.responsive);
         const keyboard = new KeyboardInput();
 
-        const screen = (factory as ScreenFactory<P | undefined>)(params) as Screen<never>;
-        this.current = screen;
+        this.current = screen as Screen<never>;
         this.currentWorld = world;
         this.currentUi = ui;
         this.currentInput = input;
@@ -108,15 +146,64 @@ export class ScreenManager {
         try {
             await screen.init(context, params as never);
         } catch (error) {
+            if (loadingDelay !== null) window.clearTimeout(loadingDelay);
             if (this.current === screen) this.disposeCurrent();
+            if (transitionId === this.transitionId) this.hideTransitionLoader();
             throw error;
         }
+
+        if (loadingDelay !== null) window.clearTimeout(loadingDelay);
+        if (transitionId === this.transitionId) this.hideTransitionLoader();
     }
 
     /** Tear down the active screen and stop forwarding resize events. Safe to call twice. */
     dispose(): void {
+        this.transitionId += 1;
+        this.hideTransitionLoader();
         this.stopResize();
         this.disposeCurrent();
+    }
+
+    private showTransitionLoader(_name: string): void {
+        if (this.transitionLoader) return;
+
+        const overlay = new Container();
+        overlay.label = 'transition-loader';
+
+        const dim = createColorBackground(COLORS.black, this.responsive, 0.72);
+        dim.eventMode = 'static';
+        overlay.addChild(dim);
+
+        const spinner = new Container();
+        spinner.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 20);
+        const track = new Graphics().circle(0, 0, 24).stroke({ width: 5, color: 0x3a3f4b });
+        const arc = new Graphics()
+            .moveTo(0, -24)
+            .arc(0, 0, 24, -Math.PI / 2, Math.PI * 0.8)
+            .stroke({ width: 5, color: COLORS.accent, cap: 'round' });
+        spinner.addChild(track, arc);
+        overlay.addChild(spinner);
+
+        const label = createLabel(`Please wait...`, {
+            fontSize: 28,
+            fill: COLORS.white,
+        });
+        label.anchor.set(0.5);
+        label.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 32);
+        overlay.addChild(label);
+
+        this.transitionLoader = overlay;
+        this.transitionSpinner = spinner;
+        this.responsive.ui.addChild(overlay);
+        this.app.ticker.add(this.updateTransitionLoader);
+    }
+
+    private hideTransitionLoader(): void {
+        this.app.ticker.remove(this.updateTransitionLoader);
+        this.transitionLoader?.removeFromParent();
+        this.transitionLoader?.destroy({ children: true });
+        this.transitionLoader = null;
+        this.transitionSpinner = null;
     }
 
     private readonly tick = (ticker: Ticker): void => {
@@ -125,6 +212,10 @@ export class ScreenManager {
 
     private readonly handleResize = (viewport: ViewportMetrics): void => {
         this.current?.onResize?.(viewport);
+    };
+
+    private readonly updateTransitionLoader = (ticker: Ticker): void => {
+        if (this.transitionSpinner) this.transitionSpinner.rotation += ticker.deltaMS * 0.006;
     };
 
     private disposeCurrent(): void {

@@ -69,8 +69,8 @@ export const STAGES: readonly StageDef[] = [
         id: 'stage-3',
         title: 'Stage 3',
         durationMs: 35_000,
-        layout: 'hex',
-        holes: 5,
+        layout: 'grid',
+        holes: 6,
         spawn: [
             { type: 'normal', weight: 3 },
             { type: 'tough', weight: 1 },
