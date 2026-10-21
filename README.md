@@ -94,10 +94,11 @@ const gameModule = import('./game/Game'); // a separate async chunk, not part of
 ```
 
 Because of that, the initial download is just a few KB (the bootstrap plus the HTML/CSS), so the
-`#splash` element in `index.html` paints and animates immediately while the ~600 KB Pixi engine
-streams in behind it. When the renderer has mounted, `Game.start()` calls its `onReady`
+`#splash` element in `index.html` paints the game's logo immediately while the ~600 KB Pixi
+engine streams in behind it. When the renderer has mounted, `Game.start()` calls its `onReady`
 callback and the splash is removed — a seamless hand-off, since the splash background matches
-`CLEAR_COLOR`.
+`CLEAR_COLOR` and `PreloaderScreen` picks the same logo up on the canvas, so the progress bar
+underneath it is the only loading feedback the player ever sees.
 
 `vite/config.prod.mjs` keeps the split efficient:
 
