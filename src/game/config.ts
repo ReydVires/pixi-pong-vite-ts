@@ -118,3 +118,23 @@ export const CELEBRATION = {
         'Thanks for playing.',
     ],
 } as const;
+
+/**
+ * What the combo ladder shouts at each step up, keyed by multiplier.
+ *
+ * The shout replaces nothing: a milestone keeps its sparks and its score, and
+ * gets this on top. There is no entry for x1, because the ladder starts there.
+ * A ladder longer than the table still gets its kick, just no word.
+ *
+ * Content, like `CELEBRATION`: edit the words, not the code.
+ */
+export const COMBO_WORDS: Record<number, string> = {
+    2: 'NICE!',
+    3: 'GREAT!',
+    4: 'AWESOME!',
+    6: 'UNSTOPPABLE!',
+    9: 'CAPY MASTER!',
+    12: 'CAPY LEGEND!',
+    14: 'KEEP UP!',
+    20: 'UNBEATABLE!',
+};

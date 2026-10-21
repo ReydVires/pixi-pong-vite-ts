@@ -11,6 +11,7 @@ import type { Screen, ScreenContext } from '../core/screens/screen';
 import { drawCapyFace } from '../entities/capyFace';
 import { CAPY_TYPES } from '../levels/capyTypes';
 import { EffectsSystem } from '../systems/EffectsSystem';
+import { Easing } from '../systems/TweenSystem';
 import { FIREWORK_COLORS, nextFirework } from '../systems/fireworks';
 import type { Firework } from '../systems/fireworks';
 import type { BurstOptions } from '../systems/particles';
@@ -283,7 +284,7 @@ export class CelebrationScreen implements Screen {
 
         if (this.dropLeft > 0) {
             this.dropLeft = Math.max(0, this.dropLeft - dt);
-            const landed = easeOutBack(1 - this.dropLeft / GIFT_DROP_MS);
+            const landed = Easing.easeOutBack(1 - this.dropLeft / GIFT_DROP_MS);
             const start = this.giftStartY();
             gift.y = start + (GIFT_Y - start) * landed;
         } else {
@@ -337,8 +338,8 @@ export class CelebrationScreen implements Screen {
             this.popLeft = Math.max(0, this.popLeft - dt);
             const t = 1 - this.popLeft / FACE_POP_MS;
 
-            face.y = this.faceRestY + FACE_RISE * (1 - easeOutBack(t, FACE_SPRING));
-            face.scale.set(0.05 + 0.95 * easeOutBack(Math.min(1, t * 1.4), FACE_SPRING));
+            face.y = this.faceRestY + FACE_RISE * (1 - Easing.easeOutBack(t, FACE_SPRING));
+            face.scale.set(0.05 + 0.95 * Easing.easeOutBack(Math.min(1, t * 1.4), FACE_SPRING));
             return;
         }
 
@@ -530,16 +531,4 @@ export class CelebrationScreen implements Screen {
     private throwBurst(color: number, x: number, y: number, options: Omit<BurstOptions, 'x' | 'y'>): void {
         this.effects?.addBurst(color, { ...options, x, y });
     }
-}
-
-/**
- * Overshoot-and-settle easing, so the present lands with a bounce.
- *
- * `overshoot` is how far past the target it swings; the default is the usual
- * subtle one, and the capy's spring turns it up.
- */
-function easeOutBack(t: number, overshoot = 1.70158): number {
-    const p = t - 1;
-
-    return 1 + (overshoot + 1) * p * p * p + overshoot * p * p;
 }

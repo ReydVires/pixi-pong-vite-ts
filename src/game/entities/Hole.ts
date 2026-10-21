@@ -1,6 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
 import { COLORS } from '../config';
-import { Entity } from '../core/entities/Entity';
 import type { HoleSlot } from '../core/layout/hexLayout';
 
 /**
@@ -10,8 +9,12 @@ import type { HoleSlot } from '../core/layout/hexLayout';
  * The lip is what sells the illusion. Capys are mounted into `socket`, so they
  * are sandwiched between the interior and the lip — they rise from behind the
  * near rim and sink below it, with no clipping needed.
+ *
+ * A plain `Container` on purpose: the hole is scenery with a socket, not a
+ * behavior host — nothing about it ticks per frame, so it carries no
+ * `Entity`/`Component` machinery it would never use.
  */
-export class Hole extends Entity {
+export class Hole extends Container {
     readonly slot: HoleSlot;
     private readonly socket = new Container();
 

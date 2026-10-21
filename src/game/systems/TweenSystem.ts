@@ -3,8 +3,14 @@ export type EasingFunction = (progress: number) => number;
 export const Easing = {
     linear: (progress: number): number => progress,
     easeOutCubic: (progress: number): number => 1 - (1 - progress) ** 3,
-    easeOutBack: (progress: number): number => {
-        const overshoot = 1.70158;
+    /**
+     * Overshoot-and-settle easing, so something lands with a bounce.
+     *
+     * `overshoot` is how far past the target it swings; the default is the
+     * usual subtle one, and things that are meant to spring (a capy popping out
+     * of a present) turn it up.
+     */
+    easeOutBack: (progress: number, overshoot = 1.70158): number => {
         return 1 + (overshoot + 1) * (progress - 1) ** 3 + overshoot * (progress - 1) ** 2;
     },
 } satisfies Record<string, EasingFunction>;

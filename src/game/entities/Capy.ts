@@ -1,14 +1,12 @@
 import { Graphics } from 'pixi.js';
 import { Emerge } from '../components/Emerge';
-import { HitTarget } from '../components/HitTarget';
+import { Flash } from '../components/Flash';
+import { HitTarget } from '../systems/HitTarget';
 import { COLORS } from '../config';
 import { Entity } from '../core/entities/Entity';
 import type { CapyType } from '../levels/types';
 import { drawCapyFace } from './capyFace';
 import type { Hole } from './Hole';
-
-/** How long a hit flash stays visible, in ms. */
-const FLASH_MS = 140;
 
 /**
  * Emerge progress below which the health pips stay hidden.
@@ -48,9 +46,8 @@ export class Capy extends Entity {
     /** Appearances still owed. Zero for everything but a `runner`. */
     private movesLeft: number;
     private readonly headRadius: number;
-    private readonly flashOverlay: Graphics;
+    private readonly flashFx: Flash;
     private readonly pips: Graphics;
-    private flashLeft = 0;
     private settled = false;
 
     constructor(type: CapyType, hole: Hole, hold = false) {
@@ -64,15 +61,18 @@ export class Capy extends Entity {
 
         // Matches the blocky head + muzzle, so a hit flash doesn't ring past it.
         const r0 = this.headRadius;
-        this.flashOverlay = new Graphics()
+        const flashOverlay = new Graphics()
             .roundRect(-r0 * 0.95, -r0 * 0.75, r0 * 1.9, r0 * 1.3, r0 * 0.4)
             .fill(0xffffff)
             .roundRect(-r0 * 0.725, r0 * 0.145, r0 * 1.45, r0 * 0.75, r0 * 0.32)
             .fill(0xffffff);
-        this.flashOverlay.alpha = 0;
+        flashOverlay.alpha = 0;
         this.pips = new Graphics();
 
-        this.addChild(this.createBody(), this.flashOverlay, this.pips);
+        this.addChild(this.createBody(), flashOverlay, this.pips);
+        // The flash is a composed behavior, not an `update()` override: the
+        // component owns the countdown and the fade, this class only triggers it.
+        this.flashFx = this.addComponent(new Flash(flashOverlay));
 
         // Must be attached, or `update()` never ticks it and the capy is
         // frozen at progress 0 — sunk, and unable to ever retreat.
@@ -128,7 +128,7 @@ export class Capy extends Entity {
 
     /** Brief white flash so a tap feels answered even before points land. */
     flash(): void {
-        this.flashLeft = FLASH_MS;
+        this.flashFx.flash();
     }
 
     /** Redraw the health pips after the hp changed. */
@@ -155,15 +155,6 @@ export class Capy extends Entity {
         this.position.y = radius * (0.554 - 1.005 * progress);
         this.scale.set(0.55 + 0.45 * progress);
         this.pips.visible = progress >= PIP_MIN_PROGRESS;
-    }
-
-    override update(dt: number): void {
-        super.update(dt);
-
-        if (this.flashLeft > 0) {
-            this.flashLeft = Math.max(0, this.flashLeft - dt);
-            this.flashOverlay.alpha = this.flashLeft / FLASH_MS;
-        }
     }
 
     private createBody(): Graphics {

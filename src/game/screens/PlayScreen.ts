@@ -1,30 +1,31 @@
 import { Container, Graphics } from 'pixi.js';
-import type { Text } from 'pixi.js';
 import { SFX } from '../audio/sfx';
-import { ASSETS, COLORS, GAME_WIDTH, SCREENS, SCREEN_CENTER } from '../config';
+import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
-import { createButton } from '../core/display/button';
-import { createLabel } from '../core/display/label';
 import { createOverlay } from '../core/display/overlay';
 import type { OverlayAction } from '../core/display/overlay';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import { holeSlots } from '../core/layout/hexLayout';
-import type { Responsive } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/screen';
+import { PlayHud, HUD_ZONE_Y } from '../ui/PlayHud';
+import { ResultsPanel } from '../ui/ResultsPanel';
 import { Hole } from '../entities/Hole';
 import { Capy } from '../entities/Capy';
+import { Shake } from '../components/Shake';
+import { Entity } from '../core/entities/Entity';
 import { CAPY_TYPES } from '../levels/capyTypes';
 import { findNextStage, findStage, isFinaleStage } from '../levels/stages';
-import type { CapyTypeId, StageDef, TutorialStep } from '../levels/types';
+import type { CapyTypeId, StageDef } from '../levels/types';
 import { canAdvance } from '../systems/ScoreKeeper';
 import { ComboTracker } from '../systems/ComboTracker';
 import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
 import type { TapOutcome } from '../systems/ScoreKeeper';
 import { EffectsSystem } from '../systems/EffectsSystem';
+import { PopupsSystem } from '../systems/PopupsSystem';
 import { pickSpawn, Spawner } from '../systems/Spawner';
 import type { BurstOptions } from '../systems/particles';
 import { SessionClock, secondsRemaining } from '../systems/SessionClock';
-import { Easing, TweenSystem } from '../systems/TweenSystem';
+import { TutorialRunner } from '../systems/TutorialRunner';
 
 /** Centre of the honeycomb in design units — leaves room for HUD and prompt. */
 const GRID_CENTER_Y = 560;
@@ -32,8 +33,6 @@ const HOLE_SPACING = 230;
 const HOLE_RADIUS = 74;
 /** Taps aim at hole centres, not exact pixels — keep it generous for thumbs. */
 const TAP_RADIUS_SCALE = 1.1;
-/** Above this line is HUD chrome (score/timer/pause), never playfield. */
-const HUD_ZONE_Y = 170;
 /** How long a wounded capy stays put so it can be finished off, in ms. */
 const WOUND_GRACE_MS = 1500;
 /**
@@ -50,19 +49,6 @@ const CLOCK_RATE = 1.25;
  * sooner than a clean one. A nudge, not a cliff: ten misses turn 1.25 into 1.5.
  */
 const MISS_CLOCK_STEP = 0.025;
-/** Lifetime of a floating score popup, in ms. */
-const POPUP_MS = 700;
-/** Y of the HUD's top row — score, countdown and the pause button share it. */
-const HUD_ROW_Y = 92;
-/** Radius and stroke for the countdown ring around the timer. */
-const TIMER_RING_RADIUS = 56;
-const TIMER_RING_WIDTH = 5;
-/** The combo line hangs directly under the countdown, not off to one side. */
-const COMBO_Y = 180;
-/** How long the combo label stays punched after the multiplier steps up, in ms. */
-const COMBO_PUNCH_MS = 260;
-/** Extra scale at the start of that punch. */
-const COMBO_PUNCH_SCALE = 0.4;
 /** What a whack throws: fast and short, gone before the next capy arrives. */
 const HIT_BURST = { count: 9, speed: [220, 640], lifeMs: [220, 420], size: [6.9, 12.65], shape: 'star' } as const;
 /** The lighter star burst behind a wound, a hazard hit or an escape. */
@@ -93,58 +79,8 @@ const SWEEP_POPUP_DROP = 96;
  */
 const CLEAR_TITLE_LIFT = 58;
 
-/** Star row of the results panel: outer/inner radius of one point. */
-const STAR_OUTER = 30;
-const STAR_INNER = 13;
-/**
- * The kick a combo milestone gives the playfield.
- *
- * Short and small on purpose: hit testing reads the holes' own slots, so the
- * shake is decoration taps never see, and it has to be over before the player
- * needs to aim again. The amplitude dies with the square of the time left,
- * which is what makes it read as one hit rather than a wobble.
- */
-const SHAKE_MS = 320;
-const SHAKE_AMPLITUDE = 10;
-/** Two rates, in ms per radian, so the axes never move as one neat wobble. */
-const SHAKE_X_RATE = 21;
-const SHAKE_Y_RATE = 14;
-/** How much of the kick goes sideways — a field shakes more than it bounces. */
-const SHAKE_Y_SCALE = 0.7;
-/**
- * What the ladder shouts at each step up, keyed by multiplier.
- *
- * The shout replaces nothing: a milestone keeps its sparks and its score, and
- * gets this on top. There is no entry for x1, because the ladder starts there.
- */
-const COMBO_WORDS: Record<number, string> = {
-    2: 'NICE!',
-    3: 'GREAT!',
-    4: 'AWESOME!',
-    6: 'UNSTOPPABLE!',
-    9: 'CAPY MASTER!',
-    12: 'CAPY LEGEND!',
-    14: 'KEEP UP!',
-    20: 'UNBEATABLE!',
-};
-/** Lifetime of the shout, in ms. */
-const COMBO_WORD_MS = 760;
-/** Shout size — louder than the combo line it covers, quieter than a title. */
-const COMBO_WORD_SIZE = 46;
-/** Share of the life spent growing, so the shout erupts rather than fades in. */
-const COMBO_WORD_POP = 0.22;
-/** Scale it erupts from; it grows into its own size from here. */
-const COMBO_WORD_FROM = 0.3;
-/** Share of the life held at full strength; everything after that fades out. */
-const COMBO_WORD_HOLD = 0.6;
-
 export interface PlayParams {
     stageId: string;
-}
-
-interface Popup {
-    label: Text;
-    life: number;
 }
 
 /**
@@ -165,8 +101,10 @@ export type PlayMode = 'playing' | 'paused' | 'finished';
  *
  * The stage itself is data (`StageDef`); this screen owns the things data
  * can't express — which hole a capy goes in, what a tap means, and when the
- * stage is over. Scripted stages are driven by `tutorial`; random ones by
- * `Spawner` and a `SessionClock`.
+ * stage is over. Scripted stages are driven by a `TutorialRunner`; random ones
+ * by `Spawner` and a `SessionClock`. Presentation lives in composed units:
+ * `PlayHud`, `ResultsPanel`, `PopupsSystem` and `EffectsSystem` — this class
+ * reports values and rules to them rather than drawing them itself.
  *
  * Hit testing is deliberately centralised: one `pointerdown` listener tests
  * every hittable capy, and a tap that hits none is a miss. That keeps
@@ -178,7 +116,6 @@ export class PlayScreen implements Screen<PlayParams> {
 
     private readonly holes: Hole[] = [];
     private readonly capys: Capy[] = [];
-    private readonly popups: Popup[] = [];
     private readonly pendingRetirement: Capy[] = [];
 
     private clock: SessionClock | null = null;
@@ -190,11 +127,8 @@ export class PlayScreen implements Screen<PlayParams> {
     private misses = 0;
     private spawned = 0;
 
-    /** Scripted-stage progress. */
-    private stepIndex = 0;
-    private stepWhacks = 0;
-    private stepElapsed = 0;
-    private stepCooldown = 0;
+    /** Scripted-stage progress, when the stage has a script to follow. */
+    private tutorial: TutorialRunner | null = null;
 
     /**
      * The screen's current mode, as a single stored value.
@@ -224,38 +158,20 @@ export class PlayScreen implements Screen<PlayParams> {
         this.state = next;
     }
 
-    private popupLayer: Container | null = null;
+    private popups: PopupsSystem | null = null;
     private effects: EffectsSystem | null = null;
     /** Everything the playfield is made of, so a milestone can kick all of it. */
-    private field: Container | null = null;
+    private field: Entity | null = null;
+    /** The field's kick, composed as a component rather than timed by the screen. */
+    private shake: Shake | null = null;
     private sweepFlash: Graphics | null = null;
     /** Milliseconds left on the golden's full-screen wash. */
     private sweepFlashLeft = 0;
-    /** Milliseconds left on the combo label's punch. */
-    private comboPunch = 0;
-    /** The ladder's shout, shown in place of the combo line while it plays. */
-    private comboWord: Text | null = null;
-    /** Milliseconds left on that shout; 0 means it is hidden. */
-    private wordLeft = 0;
-    /** Milliseconds left on the field's kick, and how far into it we are. */
-    private shakeLeft = 0;
-    private shakeTime = 0;
-    private scoreLabel: Text | null = null;
-    /** Score currently shown on the HUD. */
-    private displayedScore = 0;
-    /** Score to tween toward. */
-    private targetScore = 0;
-    private readonly tweens = new TweenSystem();
-    private comboLabel: Text | null = null;
-    private timerLabel: Text | null = null;
-    private timerRing: Graphics | null = null;
-    private promptLabel: Text | null = null;
     private pauseOverlay: Container | null = null;
-    /**
-     * Top of the UI stack: overlays mount here, so they sit above the HUD and
-     * the sweep wash no matter what order the HUD was built in.
-     */
-    private hudLayer: Container | null = null;
+    /** The HUD: score, countdown, combo line, prompt, pause button — and their animations. */
+    private hud: PlayHud | null = null;
+    /** The end-of-stage results panel, mounted when the run ends. */
+    private results: ResultsPanel | null = null;
 
     private stopTap: Unsubscribe | null = null;
     private stopPauseKey: Unsubscribe | null = null;
@@ -266,6 +182,7 @@ export class PlayScreen implements Screen<PlayParams> {
         const stage = findStage(params.stageId);
         this.context = context;
         this.stage = stage;
+        if (stage.tutorial) this.tutorial = new TutorialRunner(stage.tutorial);
 
         world.addChild(createColorBackground(COLORS.playfield, responsive));
         world.addChild(createTextureBackground(assets.texture(ASSETS.background), responsive, 0.45));
@@ -280,7 +197,8 @@ export class PlayScreen implements Screen<PlayParams> {
         // combo milestone kicks, which is why the backdrop stays out of it
         // (moving it would show the letterbox edges) and why the HUD lives in
         // `ui` (a shaking score is a score nobody can read).
-        this.field = new Container();
+        this.field = new Entity();
+        this.shake = this.field.addComponent(new Shake(this.field));
         world.addChild(this.field);
 
         for (const slot of slots) {
@@ -299,10 +217,11 @@ export class PlayScreen implements Screen<PlayParams> {
         // Added last on purpose: score popups float above the mound they rise
         // from. Adding this layer before the holes tucks every "+10" behind
         // the hole, so it vanishes as soon as it drifts over one.
-        this.popupLayer = new Container();
-        this.field.addChild(this.popupLayer);
+        const popupLayer = new Container();
+        this.field.addChild(popupLayer);
+        this.popups = new PopupsSystem(popupLayer);
 
-        this.createHud(ui, responsive);
+        this.hud = new PlayHud(ui, responsive, { onPause: () => this.togglePause() });
 
         if (stage.durationMs !== null) {
             this.clock = new SessionClock(stage.durationMs, CLOCK_RATE);
@@ -310,12 +229,42 @@ export class PlayScreen implements Screen<PlayParams> {
                 intervalMs: stage.spawnIntervalMs,
                 maxConcurrent: stage.maxConcurrent,
             });
-            this.timerLabel!.visible = true;
-            this.timerRing!.visible = true;
+            this.hud.setTimed(true);
         }
 
         // A stage can be timed *and* scripted — the tutorial is both.
-        this.promptLabel!.text = stage.tutorial ? stage.tutorial[0].prompt : stage.title;
+        this.hud.setPrompt(stage.tutorial ? stage.tutorial[0].prompt : stage.title);
+
+        // The golden's wash, invisible until a sweep fires it. Added after the
+        // HUD chrome and before the first overlay, so pausing still dims over
+        // the top of it — and left non-interactive so it can never swallow a tap.
+        this.sweepFlash = createColorBackground(COLORS.star, responsive);
+        this.sweepFlash.alpha = 0;
+        ui.addChild(this.sweepFlash);
+
+        // The pause menu: built here because it is state (this screen owns
+        // `playing` vs `paused`), mounted last so a modal is never buried under
+        // HUD chrome or the sweep wash.
+        this.pauseOverlay = createOverlay(responsive, {
+            label: 'pause-overlay',
+            title: 'Paused',
+            actions: [
+                { label: 'Resume', onTap: () => this.togglePause() },
+                {
+                    label: 'Quit to Menu',
+                    onTap: () => {
+                        // Resume before leaving, so the pause overlay is hidden
+                        // if this screen is ever reused rather than rebuilt.
+                        this.enter('playing');
+                        if (this.pauseOverlay) this.pauseOverlay.visible = false;
+                        void this.context?.screens.start(SCREENS.MainMenu);
+                    },
+                },
+            ],
+            onAction: () => this.context?.audio.play(SFX.tap),
+        });
+        this.pauseOverlay.visible = false;
+        this.hud.mountOverlay(this.pauseOverlay);
 
         this.stopTap = input.on((event) => {
             const point = responsive.toWorld(event);
@@ -330,7 +279,11 @@ export class PlayScreen implements Screen<PlayParams> {
         const stage = this.stage;
         if (!stage) return;
         if (this.mode === 'finished') {
-            this.tweens.update(dt);
+            // The panel and the HUD keep ticking so the score counts up and any
+            // in-flight tween (or a shout caught mid-air by the whistle) plays
+            // out behind the results panel.
+            this.results?.update(dt);
+            this.hud?.update(dt);
             return;
         }
         if (this.mode !== 'playing') return;
@@ -344,7 +297,7 @@ export class PlayScreen implements Screen<PlayParams> {
             }
         }
 
-        if (stage.tutorial) this.updateTutorialStage(dt, stage);
+        if (this.tutorial) this.updateTutorialStage(dt);
         else this.updateRandomStage(dt, stage);
 
         // A transition may have started above — don't touch torn-down state.
@@ -352,7 +305,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
         for (const capy of this.capys) capy.update(dt);
         this.flushRetired();
-        this.updatePopups(dt);
+        this.popups?.update(dt);
         this.updateEffects(dt);
     }
 
@@ -362,8 +315,8 @@ export class PlayScreen implements Screen<PlayParams> {
         this.stopTap = null;
         this.stopPauseKey = null;
 
-        for (const popup of this.popups) popup.label.destroy();
-        this.popups.length = 0;
+        this.popups?.destroy();
+        this.popups = null;
         this.effects?.destroy();
         this.effects = null;
         this.pendingRetirement.length = 0;
@@ -374,23 +327,15 @@ export class PlayScreen implements Screen<PlayParams> {
         this.stage = null;
         this.clock = null;
         this.spawner = null;
-        this.popupLayer = null;
+        this.tutorial = null;
         this.field = null;
+        this.shake = null;
         this.sweepFlash = null;
         this.sweepFlashLeft = 0;
-        this.comboPunch = 0;
-        this.comboWord = null;
-        this.wordLeft = 0;
-        this.shakeLeft = 0;
-        this.shakeTime = 0;
-        this.scoreLabel = null;
-        this.displayedScore = 0;
-        this.targetScore = 0;
-        this.tweens.clear();
-        this.comboLabel = null;
-        this.timerLabel = null;
-        this.timerRing = null;
-        this.promptLabel = null;
+        this.results?.destroy();
+        this.results = null;
+        this.hud?.destroy();
+        this.hud = null;
         this.pauseOverlay = null;
         // Back to a clean slate, through `enter()` like every other change, so a
         // reused instance could never start life mid-stage.
@@ -411,49 +356,26 @@ export class PlayScreen implements Screen<PlayParams> {
 
     // --- Scripted (tutorial) stages ----------------------------------------
 
-    private updateTutorialStage(dt: number, stage: StageDef): void {
-        const steps = stage.tutorial;
-        if (!steps || this.stepIndex >= steps.length) {
+    private updateTutorialStage(dt: number): void {
+        const runner = this.tutorial;
+        if (!runner) {
             this.finish();
             return;
         }
 
-        const step: TutorialStep = steps[this.stepIndex];
-        this.stepElapsed += dt;
-        this.stepCooldown -= dt;
-
-        const quotaMet = step.quota !== undefined && this.stepWhacks >= step.quota;
-        const timeMet = step.durationMs !== undefined && this.stepElapsed >= step.durationMs;
-        const stepComplete = quotaMet || timeMet;
-
-        // Stop spawning once the step is satisfied, then wait for the field to
-        // clear so the next prompt never arrives on top of a live capy.
-        if (!stepComplete && this.stepCooldown <= 0 && this.capys.length < step.concurrent) {
+        const outcome = runner.update(dt, this.capys.length, (hold) => {
             const hole = this.pickFreeHole();
-            if (hole) {
-                this.spawn('normal', hole, step.hold ?? false);
-                this.stepCooldown = Math.max(0, step.intervalMs);
-            }
-        }
+            if (!hole) return false;
+            this.spawn('normal', hole, hold);
+            return true;
+        });
 
-        if (stepComplete && this.capys.length === 0) this.advanceStep();
-    }
-
-    private advanceStep(): void {
-        const steps = this.stage?.tutorial;
-        if (!steps) return;
-
-        this.stepIndex += 1;
-        this.stepWhacks = 0;
-        this.stepElapsed = 0;
-        this.stepCooldown = 300;
-
-        if (this.stepIndex >= steps.length) {
+        if (!outcome) return;
+        if (outcome.finished) {
             this.finish();
             return;
         }
-
-        this.promptLabel!.text = steps[this.stepIndex].prompt;
+        if (outcome.prompt !== undefined) this.hud?.setPrompt(outcome.prompt);
     }
 
     // --- Taps ----------------------------------------------------------------
@@ -477,7 +399,7 @@ export class PlayScreen implements Screen<PlayParams> {
         // only other sign is a combo label the player may not have had. The
         // tutorial is the exception — it introduces the verb, not the scolding,
         // so the red "Miss!" arrives with Stage 1. The tally still moves.
-        if (!this.stage?.tutorial) this.addPopup('Miss!', x, y - 46, COLORS.hazard);
+        if (!this.stage?.tutorial) this.popups?.add('Miss!', x, y - 46, COLORS.hazard);
         // Only a tap makes a sound — an escape is the game's doing, not the
         // player's, so it stays silent however much it costs them.
         this.context?.audio.play(SFX.miss);
@@ -568,7 +490,7 @@ export class PlayScreen implements Screen<PlayParams> {
         });
         this.spray(resolved, SWEEP_BURST);
         this.sweepFlashLeft = SWEEP_FLASH_MS;
-        this.addPopup('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
+        this.popups?.add('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
 
         for (const capy of [...this.capys]) {
             if (capy === resolved || !capy.emerge.hittable) continue;
@@ -597,7 +519,7 @@ export class PlayScreen implements Screen<PlayParams> {
             const before = this.combo.multiplier;
             this.combo.recordHit();
             this.hits += 1;
-            this.stepWhacks += 1;
+            this.tutorial?.recordWhack();
             // The ladder stepping up is the moment worth answering, not just
             // reporting — so the label punches, the field kicks and the ladder
             // shouts, all from the same frame.
@@ -632,7 +554,7 @@ export class PlayScreen implements Screen<PlayParams> {
      */
     private payBounty(capy: Capy, points: number, popupDrop = 0): void {
         this.scoreKeeper.add(points);
-        this.startScoreTween(this.scoreKeeper.score);
+        this.hud?.setScore(this.scoreKeeper.score);
         this.spawnPopup(capy, points, popupDrop);
     }
 
@@ -720,7 +642,7 @@ export class PlayScreen implements Screen<PlayParams> {
         const stage = this.stage;
         if (!stage || this.mode === 'finished') return;
         this.enter('finished');
-        if (this.scoreLabel) this.scoreLabel.visible = false;
+        this.hud?.hideScore();
 
         const attempts = this.hits + this.misses;
         const accuracy = attempts > 0 ? this.hits / attempts : 0;
@@ -755,210 +677,15 @@ export class PlayScreen implements Screen<PlayParams> {
             lines.push(`Score ${stage.starThresholds[0]} to earn a star and continue`);
         }
 
-        const overlay = createOverlay(this.context!.responsive, {
-            label: 'results-overlay',
+        this.results = new ResultsPanel(this.context!.responsive, {
             title: `${stage.title} complete`,
-            // A row of stars, drawn where the panel's flow wants it, rather than
-            // at a fixed offset that could collide with the title or the lines.
-            figure: this.createStars(stars),
-            // The score is the headline, not a detail line: it gets the hero
-            // slot so it reads at a glance the moment the stage ends.
-            hero: '0',
-            onHeroCreated: (hero) => this.animateResultScore(hero, this.scoreKeeper.score),
+            stars,
+            score: this.scoreKeeper.score,
             lines,
             actions,
             onAction: () => this.context?.audio.play(SFX.tap),
-            onButtonCreated: (button, index) => this.animateResultButton(button, index),
         });
-
-        this.hudLayer?.addChild(overlay);
-    }
-
-    /** Count the final score into the results headline with a short pop. */
-    private animateResultScore(hero: Text, score: number): void {
-        hero.alpha = 0;
-        hero.scale.set(0.78);
-
-        this.tweens.to('result-score', 0, score, {
-            durationMs: Math.min(1100, 650 + score * 0.2),
-            delayMs: 120,
-            easing: Easing.easeOutCubic,
-            onUpdate: (value, progress) => {
-                hero.text = `${Math.round(value)}`;
-                hero.alpha = Math.min(1, progress * 2.5);
-                const pulse = Math.sin(progress * Math.PI) * 0.1;
-                hero.scale.set(0.78 + progress * 0.22 + pulse);
-            },
-            onComplete: () => {
-                hero.text = `${score}`;
-                hero.alpha = 1;
-                hero.scale.set(1);
-            },
-        });
-    }
-
-    /** Slide and pop each result action into view, one after another. */
-    private animateResultButton(button: Container, index: number): void {
-        const targetY = button.y;
-        const targetScale = 1;
-        const startScale = 0.82;
-        const delayMs = 360 + index * 110;
-
-        button.y = targetY + 26;
-        button.alpha = 0;
-        button.scale.set(startScale);
-        button.eventMode = 'none';
-        button.cursor = 'default';
-
-        this.tweens.to(`result-button-${index}-y`, button.y, targetY, {
-            durationMs: 420,
-            delayMs,
-            easing: Easing.easeOutBack,
-            onUpdate: (value) => {
-                button.y = value;
-            },
-        });
-        this.tweens.to(`result-button-${index}-alpha`, 0, 1, {
-            durationMs: 260,
-            delayMs,
-            easing: Easing.easeOutCubic,
-            onUpdate: (value) => {
-                button.alpha = value;
-            },
-        });
-        this.tweens.to(`result-button-${index}-scale`, startScale, targetScale, {
-            durationMs: 420,
-            delayMs,
-            easing: Easing.easeOutBack,
-            onUpdate: (value) => {
-                button.scale.set(value);
-            },
-            onComplete: () => {
-                button.eventMode = 'static';
-                button.cursor = 'pointer';
-            },
-        });
-    }
-
-    /** A row of three stars, filled according to how well the stage went. */
-    private createStars(earned: number): Container {
-        const row = new Container();
-
-        for (let i = 0; i < 3; i++) {
-            const star = this.createStar(i < earned);
-            star.position.set((i - 1) * 84, 0);
-            row.addChild(star);
-        }
-
-        return row;
-    }
-
-    private createStar(filled: boolean): Graphics {
-        const points: number[] = [];
-        for (let i = 0; i < 10; i++) {
-            const angle = (Math.PI / 5) * i - Math.PI / 2;
-            const radius = i % 2 === 0 ? STAR_OUTER : STAR_INNER;
-            points.push(Math.cos(angle) * radius, Math.sin(angle) * radius);
-        }
-
-        return new Graphics()
-            .poly(points, true)
-            .fill(filled ? COLORS.star : 0x3a3f4b)
-            .stroke({ width: 3, color: COLORS.black });
-    }
-
-    // --- HUD ----------------------------------------------------------------
-
-    private createHud(ui: Container, responsive: Responsive): void {
-        // Nudge the whole top row clear of a notched phone's Dynamic Island. The
-        // safe area is in design units already, and clamped to the design box,
-        // so this can only ever move the row down — never off the top.
-        const rowY = Math.max(HUD_ROW_Y, responsive.safeArea.y + HUD_ROW_Y * 0.6);
-
-        this.scoreLabel = createLabel('0', { fontSize: 52 });
-        this.scoreLabel.anchor.set(0, 0.5);
-        this.scoreLabel.position.set(56, rowY);
-        ui.addChild(this.scoreLabel);
-        this.displayedScore = 0;
-        this.targetScore = 0;
-        this.tweens.clear();
-
-        this.timerRing = new Graphics();
-        this.timerRing.position.set(SCREEN_CENTER.x, rowY);
-        this.timerRing.visible = false;
-        ui.addChild(this.timerRing);
-
-        this.timerLabel = createLabel('0', { fontSize: 52 });
-        this.timerLabel.anchor.set(0.5, 0.5);
-        this.timerLabel.position.set(SCREEN_CENTER.x, rowY);
-        this.timerLabel.visible = false;
-        ui.addChild(this.timerLabel);
-
-        // The combo line follows the row it hangs from, so the two cannot drift
-        // apart on a device that pushes the HUD down.
-        const comboY = COMBO_Y + (rowY - HUD_ROW_Y);
-
-        this.comboLabel = createLabel('', { fontSize: 26, fill: COLORS.star });
-        this.comboLabel.anchor.set(0.5, 0.5);
-        this.comboLabel.position.set(SCREEN_CENTER.x, comboY);
-        ui.addChild(this.comboLabel);
-
-        // The milestone's shout: the combo line's own spot, so the ladder's
-        // answer arrives exactly where the ladder is read. Built once and
-        // re-shown, because a shout is a visibility flip — not new text laid
-        // out in the middle of a tap.
-        this.comboWord = createLabel('', {
-            fontSize: COMBO_WORD_SIZE,
-            fill: COLORS.star,
-            stroke: { width: 5 },
-        });
-        this.comboWord.anchor.set(0.5, 0.5);
-        this.comboWord.position.set(SCREEN_CENTER.x, comboY);
-        this.comboWord.visible = false;
-        ui.addChild(this.comboWord);
-
-        this.promptLabel = createLabel('', { fontSize: 30 });
-        this.promptLabel.anchor.set(0.5, 0.5);
-        this.promptLabel.position.set(SCREEN_CENTER.x, 950);
-        ui.addChild(this.promptLabel);
-
-        const pause = createButton('II', () => this.togglePause(), { width: 84, height: 62, fontSize: 26 });
-        pause.position.set(GAME_WIDTH - 72, rowY);
-        ui.addChild(pause);
-
-        // The golden's wash, invisible until a sweep fires it. Added before the
-        // pause overlay so pausing still dims over the top of it, and left
-        // non-interactive so it can never swallow a tap.
-        this.sweepFlash = createColorBackground(COLORS.star, responsive);
-        this.sweepFlash.alpha = 0;
-        ui.addChild(this.sweepFlash);
-
-        this.pauseOverlay = createOverlay(responsive, {
-            label: 'pause-overlay',
-            title: 'Paused',
-            actions: [
-                { label: 'Resume', onTap: () => this.togglePause() },
-                {
-                    label: 'Quit to Menu',
-                    onTap: () => {
-                        // Resume before leaving, so the pause overlay is hidden
-                        // if this screen is ever reused rather than rebuilt.
-                        this.enter('playing');
-                        if (this.pauseOverlay) this.pauseOverlay.visible = false;
-                        void this.context?.screens.start(SCREENS.MainMenu);
-                    },
-                },
-            ],
-            onAction: () => this.context?.audio.play(SFX.tap),
-        });
-        this.pauseOverlay.visible = false;
-
-        // Overlays live above everything else in the UI, so a modal is never
-        // buried under HUD chrome or the sweep wash.
-        this.hudLayer = new Container();
-        this.hudLayer.label = 'overlays';
-        ui.addChild(this.hudLayer);
-        this.hudLayer.addChild(this.pauseOverlay);
+        this.hud?.mountOverlay(this.results.overlay);
     }
 
     /**
@@ -979,120 +706,37 @@ export class PlayScreen implements Screen<PlayParams> {
         if (this.pauseOverlay) this.pauseOverlay.visible = next === 'paused';
     }
 
-    private startScoreTween(next: number): void {
-        const label = this.scoreLabel;
-        if (!label) return;
-        if (next === this.targetScore) return;
-        const delta = next - this.targetScore;
-        if (delta === 0) return;
-        this.targetScore = next;
-        const durationMs = Math.min(420, 220 + Math.abs(delta) * 0.08);
-
-        this.tweens.to('score', this.displayedScore, next, {
-            durationMs,
-            easing: Easing.easeOutCubic,
-            onUpdate: (value) => {
-                this.displayedScore = Math.round(value);
-                label.text = `${this.displayedScore}`;
-            },
-            onComplete: () => {
-                this.displayedScore = next;
-                label.text = `${next}`;
-            },
-        });
-
-        // Keep the HUD emphasis local; the tween system owns timing/easing.
-        const scaleFrom = Math.abs(delta) >= 50 ? 1.12 : 1.08;
-        label.scale.set(scaleFrom);
-        label.rotation = (Math.random() - 0.5) * 0.08;
-        this.tweens.to('score-scale', scaleFrom, 1, {
-            durationMs: 300,
-            easing: Easing.easeOutBack,
-            onUpdate: (scale) => label.scale.set(scale),
-        });
-        this.tweens.to('score-rotation', label.rotation, 0, {
-            durationMs: 300,
-            easing: Easing.easeOutCubic,
-            onUpdate: (rotation) => {
-                label.rotation = rotation;
-            },
-        });
-    }
-
-    private updateScoreTween(dt: number): void {
-        this.tweens.update(dt);
-    }
-
+    /** Restate the HUD from the current rules: the combo line, and the countdown if there is one. */
     private updateHud(): void {
-        if (this.comboLabel) {
-            const { multiplier, count } = this.combo;
-            this.comboLabel.text = count > 0 ? `x${multiplier}  combo ${count}` : '';
-        }
+        const hud = this.hud;
+        if (!hud) return;
 
-        if (this.timerLabel && this.clock) {
-            this.timerLabel.text = `${secondsRemaining(this.clock.remainingMs)}`;
-            this.drawTimerRing();
-        }
-    }
+        hud.setCombo(this.combo.multiplier, this.combo.count);
 
-    /** Draw remaining time as a shrinking arc behind the countdown label. */
-    private drawTimerRing(): void {
-        const ring = this.timerRing;
-        const clock = this.clock;
-        if (!ring || !clock) return;
-
-        const fraction = Math.max(0, Math.min(1, clock.remainingMs / clock.durationMs));
-        const start = -Math.PI / 2;
-
-        ring.clear();
-        ring.circle(0, 0, TIMER_RING_RADIUS).stroke({
-            width: TIMER_RING_WIDTH,
-            color: 0x3a3f4b,
-            alpha: 0.9,
-        });
-
-        if (fraction > 0) {
-            const startX = Math.cos(start) * TIMER_RING_RADIUS;
-            const startY = Math.sin(start) * TIMER_RING_RADIUS;
-            ring.moveTo(startX, startY)
-                .arc(0, 0, TIMER_RING_RADIUS, start, start + Math.PI * 2 * fraction)
-                .stroke({
-                    width: TIMER_RING_WIDTH,
-                    color: COLORS.accent,
-                    cap: 'round',
-                });
+        if (this.clock) {
+            hud.setTime(secondsRemaining(this.clock.remainingMs), this.clock.remainingMs / this.clock.durationMs);
         }
     }
 
     // --- Juice --------------------------------------------------------------
 
     /**
-     * A step up the combo ladder: punch the line, kick the field, shout it.
+     * A step up the combo ladder: the sound of the tier.
      *
      * The whack that caused this already threw its own sparks, so a milestone
      * adds weight and a word rather than more particles — the ladder should feel
-     * like a new tier, not like a slightly bigger hit. The word lands on the
-     * combo line it answers, which is the one band free in every layout: under
-     * the HUD, clear of the topmost hole and its own score popup.
+     * like a new tier, not like a slightly bigger hit. The rest of the beat is
+     * delegated: the field's kick is the `Shake` component, and the punch and
+     * word are `PlayHud.shout` (where the word's placement rule lives).
      */
     private celebrateCombo(multiplier: number): void {
-        this.comboPunch = COMBO_PUNCH_MS;
-        this.shakeLeft = SHAKE_MS;
-        this.shakeTime = 0;
         // Same beat as the kick and the shout — the tier, heard. The ladder
         // tops out at x5, so the pitch climbs two semitones a step and stops.
         this.context?.audio.play(SFX.combo, { rate: 1 + (multiplier - 2) * 0.18 });
-
-        const label = this.comboWord;
-        const word = COMBO_WORDS[multiplier];
-        // A ladder longer than the table still gets its kick, just no word.
-        if (!label || !word) return;
-
-        label.text = word;
-        label.visible = true;
-        label.alpha = 1;
-        label.scale.set(COMBO_WORD_FROM);
-        this.wordLeft = COMBO_WORD_MS;
+        // The three channels of one milestone: field kicks (a component), the
+        // line punches and the ladder shouts (the HUD), and this — the sound.
+        this.shake?.kick();
+        this.hud?.shout(multiplier);
     }
 
     /**
@@ -1111,7 +755,7 @@ export class PlayScreen implements Screen<PlayParams> {
     }
 
     private spawnPopup(capy: Capy, points: number, drop = 0): void {
-        this.addPopup(
+        this.popups?.add(
             `${points >= 0 ? '+' : ''}${points}`,
             capy.hole.slot.x,
             capy.hole.slot.y - HOLE_RADIUS - 46 + drop,
@@ -1120,99 +764,13 @@ export class PlayScreen implements Screen<PlayParams> {
     }
 
     /**
-     * Float any label above the popup layer, e.g. "Miss!" for a whiff. Sharing
-     * this with score popups keeps rise speed and fade identical for both.
-     */
-    private addPopup(text: string, x: number, y: number, fill: number, fontSize = 36): void {
-        if (!this.popupLayer) return;
-
-        const label = createLabel(text, {
-            fontSize,
-            fill,
-            stroke: { color: COLORS.black, width: 3 },
-        });
-        label.anchor.set(0.5);
-        label.position.set(x, y);
-
-        this.popupLayer.addChild(label);
-        this.popups.push({ label, life: 0 });
-    }
-
-    private updatePopups(dt: number): void {
-        for (let i = this.popups.length - 1; i >= 0; i--) {
-            const popup = this.popups[i];
-            popup.life += dt;
-            popup.label.y -= 0.05 * dt;
-            popup.label.alpha = Math.max(0, 1 - popup.life / POPUP_MS);
-
-            if (popup.life >= POPUP_MS) {
-                popup.label.destroy();
-                this.popups.splice(i, 1);
-            }
-        }
-    }
-
-    /**
-     * Take the kick, then put the field back exactly where it belongs.
-     *
-     * Both axes start at zero and the amplitude dies with the clock left, so
-     * the field is never snapped sideways the frame a shout lands, and never
-     * left sitting off-centre once the kick is over.
-     */
-    private updateShake(dt: number): void {
-        const field = this.field;
-        if (!field) return;
-
-        if (this.shakeLeft <= 0) {
-            if (field.x !== 0 || field.y !== 0) field.position.set(0, 0);
-            return;
-        }
-
-        this.shakeLeft = Math.max(0, this.shakeLeft - dt);
-        this.shakeTime += dt;
-
-        const amp = SHAKE_AMPLITUDE * (this.shakeLeft / SHAKE_MS) ** 2;
-        field.position.set(
-            Math.sin(this.shakeTime / SHAKE_X_RATE) * amp,
-            Math.sin(this.shakeTime / SHAKE_Y_RATE) * amp * SHAKE_Y_SCALE,
-        );
-    }
-
-    /**
-     * Play the shout out — grow in, hold, fade — and hand the combo line back.
-     *
-     * The plain line is hidden while the shout is up rather than showing through
-     * it, and comes back reading whatever the streak is by then, so a miss taken
-     * during the shout still lands in the label.
-     */
-    private updateComboWord(dt: number): void {
-        const label = this.comboWord;
-        if (!label) return;
-
-        if (this.wordLeft > 0) {
-            this.wordLeft = Math.max(0, this.wordLeft - dt);
-
-            const t = 1 - this.wordLeft / COMBO_WORD_MS;
-            const grow = 1 - (1 - Math.min(1, t / COMBO_WORD_POP)) ** 2;
-            const fade = 1 - Math.max(0, t - COMBO_WORD_HOLD) / (1 - COMBO_WORD_HOLD);
-
-            label.scale.set(COMBO_WORD_FROM + (1 - COMBO_WORD_FROM) * grow);
-            label.alpha = Math.max(0, fade);
-
-            if (this.wordLeft === 0) label.visible = false;
-        }
-
-        if (this.comboLabel) this.comboLabel.visible = this.wordLeft <= 0;
-    }
-
-    /**
      * Tick the one-shot effects and drop the ones that have played out.
      *
      * Each effect reports its own `finished` rather than the screen timing it,
      * so adding another kind is a new array and one more loop, not a new timer.
-     * The combo punch and the kick live here too: they are per-frame decoration,
-     * and nothing else is guaranteed to run every frame once the countdown is
-     * gone.
+     * The HUD (score tween, combo punch, shout) and the field's kick live here
+     * too: they are per-frame decoration, and nothing else is guaranteed to run
+     * every frame once the countdown is gone.
      */
     private updateEffects(dt: number): void {
         this.effects?.update(dt);
@@ -1222,12 +780,10 @@ export class PlayScreen implements Screen<PlayParams> {
             if (this.sweepFlash) this.sweepFlash.alpha = SWEEP_FLASH_PEAK * (this.sweepFlashLeft / SWEEP_FLASH_MS);
         }
 
-        this.updateScoreTween(dt);
+        this.hud?.update(dt);
 
-        if (this.comboPunch > 0) this.comboPunch = Math.max(0, this.comboPunch - dt);
-        if (this.comboLabel) this.comboLabel.scale.set(1 + COMBO_PUNCH_SCALE * (this.comboPunch / COMBO_PUNCH_MS));
-
-        this.updateShake(dt);
-        this.updateComboWord(dt);
+        // The field's kick is a composed component — ticked here only because
+        // this is the loop guaranteed to run every frame.
+        this.field?.update(dt);
     }
 }

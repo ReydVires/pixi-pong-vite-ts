@@ -1,7 +1,7 @@
 import type { Container } from 'pixi.js';
-import { Burst } from '../components/Burst';
-import { Shockwave } from '../components/Shockwave';
-import type { ShockwaveOptions } from '../components/Shockwave';
+import { Burst } from '../entities/Burst';
+import { Shockwave } from '../entities/Shockwave';
+import type { ShockwaveOptions } from '../entities/Shockwave';
 import type { BurstOptions } from './particles';
 
 /**
