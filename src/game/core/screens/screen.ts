@@ -66,3 +66,19 @@ export interface Screen<P = void> {
 }
 
 export type ScreenFactory<P = void> = (params: P) => Screen<P> | Promise<Screen<P>>;
+
+/**
+ * The route map: screen key → the params its `init()` accepts.
+ *
+ * Core ships the interface empty on purpose. The game declares the real
+ * routes by merging into it (see `screens/index.ts`), which is what lets
+ * `ScreenManager` check `register()`/`start()` keys and payloads against a
+ * single table without core knowing anything about the screens it carries.
+ */
+export interface ScreenRoutes {}
+
+/**
+ * The arguments `start()` takes for a route: routes with `void` params take
+ * none, routes with a payload type require it.
+ */
+export type StartArgs<P> = [P] extends [void] ? [params?: undefined] : [params: P];

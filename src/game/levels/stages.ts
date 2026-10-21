@@ -137,7 +137,7 @@ export const STAGES: readonly StageDef[] = [
     },
 ];
 
-/** Stage the menu starts with. */
+/** Stage the menu starts with — until the tutorial is won; see `startingStageId()`. */
 export const FIRST_STAGE_ID = STAGES[0].id;
 
 export function findStage(id: string): StageDef {

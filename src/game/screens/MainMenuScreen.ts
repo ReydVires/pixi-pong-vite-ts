@@ -13,7 +13,7 @@ import type { Unsubscribe } from '../core/input/PointerInput';
 import type { ViewportMetrics } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
-import { FIRST_STAGE_ID } from '../levels/stages';
+import { isTutorialDone, startingStageId } from '../systems/progress';
 
 export class MainMenuScreen implements Screen {
     private readonly entities: Entity[] = [];
@@ -43,7 +43,9 @@ export class MainMenuScreen implements Screen {
             audio.play(SFX.tap);
             this.stopListening?.();
             this.stopListening = null;
-            void screens.start(SCREENS.Play, { stageId: FIRST_STAGE_ID });
+            // The tutorial is a one-time handshake — beaten once, and every
+            // later session starts at the first real stage instead.
+            void screens.start(SCREENS.Play, { stageId: startingStageId() });
         }, { width: 340, height: 88, fontSize: 40 });
         play.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 140);
         ui.addChild(play);
@@ -64,14 +66,17 @@ export class MainMenuScreen implements Screen {
         });
         ui.addChild(sound);
 
-        // Show a tiny blurb so first-time players know the tutorial is ahead
-        const tut = createLabel(
-            'Starts with a quick tutorial — tap the first capy, then they escape',
-            { fontSize: 16, fill: COLORS.white },
-        );
-        tut.anchor.set(0.5);
-        tut.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 230);
-        ui.addChild(tut);
+        // A tiny blurb so first-time players know the tutorial is ahead — only
+        // until it has actually been won; a returning player needs no forecast.
+        if (!isTutorialDone()) {
+            const tut = createLabel(
+                'Starts with a quick tutorial — tap the first capy, then they escape',
+                { fontSize: 16, fill: COLORS.white },
+            );
+            tut.anchor.set(0.5);
+            tut.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 230);
+            ui.addChild(tut);
+        }
 
         // Demonstrates reacting to the live viewport (orientation + breakpoint).
         this.info = createLabel('', { fontSize: 18, fill: COLORS.white });

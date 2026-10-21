@@ -54,14 +54,6 @@ export class CelebrationScreen implements Screen {
         glow.position.set(SCREEN_CENTER.x, GIFT_Y);
         world.addChild(glow);
 
-        this.gift = await Gift.create(assets, {
-            // Re-read every frame, so a resize mid-drop still falls in from
-            // outside the screen rather than from inside the letterbox.
-            startY: () => giftStartY(this.context?.responsive.visibleBounds),
-            onOpen: () => this.onGiftOpened(),
-        });
-        world.addChild(this.gift);
-
         this.hint = createLabel('Tap the present', { fontSize: 30 });
         this.hint.anchor.set(0.5);
         this.hint.position.set(SCREEN_CENTER.x, LOWER_TEXT_Y);
@@ -82,6 +74,14 @@ export class CelebrationScreen implements Screen {
         this.fireworks.start();
 
         this.veil = new ScreenVeil(ui, responsive);
+
+        this.gift = await Gift.create(assets, {
+            // Re-read every frame, so a resize mid-drop still falls in from
+            // outside the screen rather than from inside the letterbox.
+            startY: () => giftStartY(this.context?.responsive.visibleBounds),
+            onOpen: () => this.onGiftOpened(),
+        });
+        world.addChild(this.gift);
     }
 
     update(dt: number): void {

@@ -79,9 +79,9 @@ move between them.
 The game follows a **composition + data-driven** design:
 
 - **Screens** (`screens/`) are navigable game states and nothing else — they own the lifecycle and orchestration (Preloader, MainMenu, Play, Celebration, Letter) and keep the *rules*: when a stage ends, what a tap means, which screen comes next
-- **UI units** (`ui/`) are composed presentation pieces a screen mounts and ticks: `PlayHud`, `ResultsPanel`, `WishPanel`. Spec in, callbacks out — they never navigate or score on their own
+- **UI units** (`ui/`) are composed presentation pieces a screen mounts and ticks: `PlayHud`, `ResultsPanel`, `PausePanel`, `WishPanel`, `SweepWash`. Spec in, callbacks out — they never navigate or score on their own
 - **Systems** (`systems/`) hold reusable logic: pure rules (timing, scoring, combos, spawning, the tutorial) plus focused runtime services such as tweens, particles and Pixi effect lifecycles
-- **Entities + Components** (`entities/`, `components/`) compose display objects with behaviours (`Hole`, `Capy`, `Gift`, `Emerge`, `HitTarget`, `Spin`, `Shake`, etc.)
+- **Entities + Components** (`entities/`, `components/`) compose display objects with behaviours (`Hole`, `Capy`, `Gift`, `Emerge`, `Spin`, `Shake`, etc.)
 - **Core plumbing** (`core/`) is reusable engine code (screens, input, assets, audio, display, responsive, layout)
 - **Data** (`levels/`, `config.ts`, `audio/sfx.ts`) drives content; code drives behaviour
 
@@ -137,10 +137,10 @@ src/
     ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
     │                           TutorialRunner, TweenSystem, EffectsSystem, FireworksSystem,
     │                           PopupsSystem, HitTarget + the particles/fireworks math
-    ├── components/             Gameplay components: Emerge, HitTarget, Spin, Pulse, Flash, Shake
+    ├── components/             Gameplay components: Emerge, Spin, Pulse, Flash, Shake
     ├── entities/               Display actors: Hole, Capy, Gift + the capyFace drawing helper
     ├── ui/                     Composed presentation units a screen mounts and ticks:
-    │                           PlayHud, ResultsPanel, WishPanel
+    │                           PlayHud, ResultsPanel, PausePanel, WishPanel, SweepWash
     └── screens/                The navigable screens — orchestration + rules  ← most of your work happens here
         ├── index.ts            Registers every screen (Play + Letter load as async chunks)
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
@@ -193,8 +193,11 @@ overlay appears and remains until the new screen's async `init()` completes.
 
 ### Passing data between screens
 
-`screens.start()` accepts an optional `params` payload that is handed to the next screen's
-factory and `init()`. Declare the payload type on the screen that receives it:
+The payload travels through the **route map**: each screen's key is tied to its params type in
+`screens/index.ts` (a merge into core's open `ScreenRoutes` interface), so `start()` *requires*
+a payload exactly when the route declares one — a `void` route takes none, and a missing or
+misspelled field is a compile error rather than a runtime surprise. The receiving screen
+declares the type itself:
 
 ```ts
 // The receiving screen declares what it expects (see PlayScreen.ts):
@@ -211,14 +214,23 @@ export class PlayScreen implements Screen<PlayParams> {
 ```
 
 ```ts
+// ...and the route map ties the key to that type (see screens/index.ts):
+declare module '../core/screens/screen' {
+    interface ScreenRoutes {
+        Play: PlayParams;
+    }
+}
+```
+
+```ts
 // The sending screen passes it at transition time (see PlayScreen.finish()):
 void screens.start(SCREENS.Play, { stageId: 'stage-2' });
 ```
 
-Screens that don't need data simply use the default `Screen` (i.e. `Screen<void>`) and ignore
-the param. Note that `params` is **per-transition** — it exists only while the screen is
-active. For state that must outlive screens (settings, totals), create a small store in
-`Game.ts` and reach it through the `ScreenContext` instead.
+Screens that don't need data simply declare `void` in the route map and use the default
+`Screen` (i.e. `Screen<void>`). Note that `params` is **per-transition** — it exists only while
+the screen is active. For state that must outlive screens (settings, totals), create a small
+store in `Game.ts` and reach it through the `ScreenContext` instead.
 
 ### Modals that aren't screens
 
@@ -378,14 +390,23 @@ Copy-paste starting points. All snippets assume you're inside a screen's `init(c
    type and use `implements Screen<SettingsParams>` — see
    **[Passing data between screens](#passing-data-between-screens)**.
 
-3. Register it in `src/game/screens/index.ts`:
+3. Declare its route and register it in `src/game/screens/index.ts`:
 
    ```ts
+   // The route map ties the key to the params init() takes — register() and
+   // start() both check against it, so a typo'd key or payload won't compile.
+   declare module '../core/screens/screen' {
+       interface ScreenRoutes {
+           Settings: void; // or: Settings: SettingsParams
+       }
+   }
+
    screens.register(SCREENS.Settings, () => new SettingsScreen());
    ```
 
-4. Navigate to it from anywhere with `screens.start(SCREENS.Settings)` — optionally with a
-   payload: `screens.start(SCREENS.Settings, { level: 3 })`.
+4. Navigate to it from anywhere with `screens.start(SCREENS.Settings)` — routes that declare a
+   params type require the payload (`screens.start(SCREENS.Settings, { level: 3 })`), and a
+   `void` route takes none.
 
 ### Show an image
 
@@ -718,7 +739,7 @@ is played rather than cached as an image — see **[Add a sound file](#add-a-sou
 
 - In **dev builds only**, the running game is exposed as `window.game`. From the browser
   console you can do things like `game.screens.active`, `game.responsive.viewport`, or even
-  `game.screens.start('Game')`. This is stripped from production builds.
+  `game.screens.start('Celebration')`. This is stripped from production builds.
 - `game.audio` is the sound manager: `game.audio.muted`, `game.audio.setVolume(0.3)`,
   `game.audio.play('whack')`. Nothing plays until the page has seen a click or a keypress —
   that is the browser's autoplay policy, not a bug.
@@ -729,7 +750,8 @@ is played rather than cached as an image — see **[Add a sound file](#add-a-sou
 ## Conventions
 
 - **Screens are navigable states — nothing else.** New screens go in `src/game/screens/`
-  (`SomethingScreen.ts`, registered in `screens/index.ts`); composed panels and HUDs go in
+  (`SomethingScreen.ts`, declared in the `ScreenRoutes` map and registered in
+  `screens/index.ts`); composed panels and HUDs go in
   `src/game/ui/` as spec-in/callbacks-out units a screen mounts and ticks. The two never
   share a directory. `src/game/core/` is engine plumbing — treat it as stable and extend it
   only when it genuinely helps.

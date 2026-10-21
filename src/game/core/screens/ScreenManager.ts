@@ -10,16 +10,20 @@ import { PointerInput } from '../input/PointerInput';
 import type { Responsive, ViewportMetrics } from '../responsive/Responsive';
 import type { Unsubscribe } from '../responsive/layout';
 import type { Nullable } from '../types';
-import type { Screen, ScreenContext, ScreenFactory } from './screen';
+import type { Screen, ScreenContext, ScreenFactory, ScreenRoutes, StartArgs } from './screen';
 
 const TRANSITION_LOADER_DELAY_MS = 160;
 
 /**
  * Owns the lifecycle of screens: registration, transitions, teardown
- * and per-frame updates of whichever screen is currently active.
+ * and per-frame updates of whichever screen is active.
  *
  * Every screen gets a `world` and a `ui` container mounted into the matching
  * responsive layer, so content automatically follows the viewport transform.
+ *
+ * Keys and payloads are checked against the game's route map (`ScreenRoutes`,
+ * declared by augmentation in `screens/index.ts`): `register()` only accepts
+ * declared keys, and `start()` only accepts the params its screen declares.
  *
  * Transition guarantees:
  * - the outgoing screen's `destroy()` runs before the incoming `init()`,
@@ -35,7 +39,7 @@ export class ScreenManager {
     private currentUi: Nullable<Container> = null;
     private currentInput: Nullable<PointerInput> = null;
     private currentKeyboard: Nullable<KeyboardInput> = null;
-    private currentName: Nullable<string> = null;
+    private currentName: Nullable<keyof ScreenRoutes & string> = null;
     private transitionId = 0;
     private transitionLoader: Nullable<Container> = null;
     private transitionSpinner: Nullable<Container> = null;
@@ -52,33 +56,40 @@ export class ScreenManager {
 
     /**
      * Register a screen factory under a key. Returns `this` for chaining.
+     * The key and the factory's params come from the route map (`ScreenRoutes`),
+     * as do `start()`'s — so a typo'd key or a mismatched payload won't compile.
      * The factory receives the `params` passed to `start()` at transition time.
      */
-    register<P>(name: string, factory: ScreenFactory<P>): this {
+    register<K extends keyof ScreenRoutes & string>(name: K, factory: ScreenFactory<ScreenRoutes[K]>): this {
+        // The map is heterogeneous: it erases to `never` inside, and the route
+        // map puts the types back on both edges (register and start).
         this.factories.set(name, factory as ScreenFactory<never>);
         return this;
     }
 
     /** Key of the currently active screen, if any. */
-    get active(): Nullable<string> {
+    get active(): Nullable<keyof ScreenRoutes & string> {
         return this.currentName;
     }
 
     /**
      * Resolve the next screen, tear down the current one, then `init()` the next.
      * `params` is handed to the new screen's factory and `init()` — use it to
-     * carry data across the transition (e.g. the final score).
+     * carry data across the transition (e.g. the final score). The route map
+     * decides whether it is required: a `void` route takes none, a route with a
+     * payload type won't compile without one.
      * If a newer transition starts while its factory is awaiting, the older
      * request is abandoned and never activated.
      */
-    async start<P>(name: string, params?: P): Promise<void> {
+    async start<K extends keyof ScreenRoutes & string>(name: K, ...args: StartArgs<ScreenRoutes[K]>): Promise<void> {
+        const params = args[0] as ScreenRoutes[K] | undefined;
         const factory = this.factories.get(name);
         if (!factory) {
             throw new Error(`Unknown screen "${name}". Did you register it in registerScreens()?`);
         }
 
         const transitionId = ++this.transitionId;
-        const result = (factory as ScreenFactory<P | undefined>)(params);
+        const result = (factory as ScreenFactory<ScreenRoutes[K] | undefined>)(params);
         let screen: Awaited<typeof result>;
         let loadingDelay: Nullable<number> = null;
 

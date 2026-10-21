@@ -1,15 +1,16 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container } from 'pixi.js';
 import { SFX } from '../audio/sfx';
 import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
-import { createOverlay } from '../core/display/overlay';
 import type { OverlayAction } from '../core/display/overlay';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import { holeSlots } from '../core/layout/hexLayout';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
 import { PlayHud, HUD_ZONE_Y } from '../ui/PlayHud';
+import { PausePanel } from '../ui/PausePanel';
 import { ResultsPanel } from '../ui/ResultsPanel';
+import { SweepWash } from '../ui/SweepWash';
 import { Hole } from '../entities/Hole';
 import { Capy } from '../entities/Capy';
 import { Shake } from '../components/Shake';
@@ -19,6 +20,7 @@ import { findNextStage, findStage, isFinaleStage } from '../levels/stages';
 import type { CapyTypeId, StageDef } from '../levels/types';
 import { canAdvance } from '../systems/ScoreKeeper';
 import { ComboTracker } from '../systems/ComboTracker';
+import { markTutorialDone } from '../systems/progress';
 import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
 import type { TapOutcome } from '../systems/ScoreKeeper';
 import { EffectsSystem } from '../systems/EffectsSystem';
@@ -56,10 +58,6 @@ const HIT_BURST = { count: 9, speed: [220, 640], lifeMs: [220, 420], size: [6.9,
 const SOFT_BURST = { count: 6, speed: [140, 380], lifeMs: [200, 380], size: [4, 8], shape: 'star' } as const;
 /** What the golden's sweep throws — the largest handful in the game. */
 const SWEEP_BURST = { count: 22, speed: [260, 900], lifeMs: [320, 640], size: [4, 9] } as const;
-/** How long the gold wash of a sweep takes to fade, in ms. */
-const SWEEP_FLASH_MS = 240;
-/** How strong that wash gets: a tint over the field, not a whiteout. */
-const SWEEP_FLASH_PEAK = 0.25;
 /** How far a sweep's ring reaches — past the last hole on the widest layout. */
 const SWEEP_RING_MS = 380;
 /**
@@ -104,8 +102,9 @@ export type PlayMode = 'playing' | 'paused' | 'finished';
  * can't express — which hole a capy goes in, what a tap means, and when the
  * stage is over. Scripted stages are driven by a `TutorialRunner`; random ones
  * by `Spawner` and a `SessionClock`. Presentation lives in composed units:
- * `PlayHud`, `ResultsPanel`, `PopupsSystem` and `EffectsSystem` — this class
- * reports values and rules to them rather than drawing them itself.
+ * `PlayHud`, `ResultsPanel`, `PausePanel`, `SweepWash`, `PopupsSystem` and
+ * `EffectsSystem` — this class reports values and rules to them rather than
+ * drawing them itself.
  *
  * Hit testing is deliberately centralised: one `pointerdown` listener tests
  * every hittable capy, and a tap that hits none is a miss. That keeps
@@ -165,10 +164,10 @@ export class PlayScreen implements Screen<PlayParams> {
     private field: Nullable<Entity> = null;
     /** The field's kick, composed as a component rather than timed by the screen. */
     private shake: Nullable<Shake> = null;
-    private sweepFlash: Nullable<Graphics> = null;
-    /** Milliseconds left on the golden's full-screen wash. */
-    private sweepFlashLeft = 0;
-    private pauseOverlay: Nullable<Container> = null;
+    /** The golden's sweep wash — presentation for the `clear` effect's rule. */
+    private sweepWash: Nullable<SweepWash> = null;
+    /** The pause menu — chrome around this screen's `playing`/`paused` state. */
+    private pause: Nullable<PausePanel> = null;
     /** The HUD: score, countdown, combo line, prompt, pause button — and their animations. */
     private hud: Nullable<PlayHud> = null;
     /** The end-of-stage results panel, mounted when the run ends. */
@@ -236,36 +235,26 @@ export class PlayScreen implements Screen<PlayParams> {
         // A stage can be timed *and* scripted — the tutorial is both.
         this.hud.setPrompt(stage.tutorial ? stage.tutorial[0].prompt : stage.title);
 
-        // The golden's wash, invisible until a sweep fires it. Added after the
-        // HUD chrome and before the first overlay, so pausing still dims over
-        // the top of it — and left non-interactive so it can never swallow a tap.
-        this.sweepFlash = createColorBackground(COLORS.star, responsive);
-        this.sweepFlash.alpha = 0;
-        ui.addChild(this.sweepFlash);
+        // The golden's wash, invisible until a sweep fires it — added after the
+        // HUD chrome and before the first overlay (see `SweepWash`'s doc).
+        this.sweepWash = new SweepWash(ui, responsive);
 
-        // The pause menu: built here because it is state (this screen owns
-        // `playing` vs `paused`), mounted last so a modal is never buried under
-        // HUD chrome or the sweep wash.
-        this.pauseOverlay = createOverlay(responsive, {
-            label: 'pause-overlay',
-            title: 'Paused',
-            actions: [
-                { label: 'Resume', onTap: () => this.togglePause() },
-                {
-                    label: 'Quit to Menu',
-                    onTap: () => {
-                        // Resume before leaving, so the pause overlay is hidden
-                        // if this screen is ever reused rather than rebuilt.
-                        this.enter('playing');
-                        if (this.pauseOverlay) this.pauseOverlay.visible = false;
-                        void this.context?.screens.start(SCREENS.MainMenu);
-                    },
-                },
-            ],
+        // The pause menu: the overlay is chrome, but what each button *does* is
+        // rule — this screen owns `playing` vs `paused`, so it hands the HUD its
+        // callbacks and keeps the state. Mounted last so a modal is never buried
+        // under HUD chrome or the sweep wash.
+        this.pause = new PausePanel(responsive, {
+            onResume: () => this.togglePause(),
+            onQuit: () => {
+                // Resume before leaving, so the pause overlay is hidden
+                // if this screen is ever reused rather than rebuilt.
+                this.enter('playing');
+                this.pause?.setPaused(false);
+                void this.context?.screens.start(SCREENS.MainMenu);
+            },
             onAction: () => this.context?.audio.play(SFX.tap),
         });
-        this.pauseOverlay.visible = false;
-        this.hud.mountOverlay(this.pauseOverlay);
+        this.hud.mountOverlay(this.pause.overlay);
 
         this.stopTap = input.on((event) => {
             const point = responsive.toWorld(event);
@@ -331,13 +320,12 @@ export class PlayScreen implements Screen<PlayParams> {
         this.tutorial = null;
         this.field = null;
         this.shake = null;
-        this.sweepFlash = null;
-        this.sweepFlashLeft = 0;
+        this.sweepWash = null;
+        this.pause = null;
         this.results?.destroy();
         this.results = null;
         this.hud?.destroy();
         this.hud = null;
-        this.pauseOverlay = null;
         // Back to a clean slate, through `enter()` like every other change, so a
         // reused instance could never start life mid-stage.
         this.enter('playing');
@@ -490,7 +478,7 @@ export class PlayScreen implements Screen<PlayParams> {
             color: COLORS.star,
         });
         this.spray(resolved, SWEEP_BURST);
-        this.sweepFlashLeft = SWEEP_FLASH_MS;
+        this.sweepWash?.arm();
         this.popups?.add('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
 
         for (const capy of [...this.capys]) {
@@ -654,6 +642,10 @@ export class PlayScreen implements Screen<PlayParams> {
         // stage; coming up empty repeats it rather than dead-ending the run.
         const advanced = canAdvance(stars);
 
+        // Winning a scripted stage ends the handshake for good: later sessions
+        // start past the tutorial (see `progress.ts`).
+        if (stage.tutorial && advanced) markTutorialDone();
+
         // The bottom of the table has no next stage, so its "Next" is the one
         // that leaves the game: it opens the celebration. Same label, same
         // colour, same place as every other stage's — the present is not
@@ -668,7 +660,11 @@ export class PlayScreen implements Screen<PlayParams> {
         }
         // Replay restarts the same stage without leaving it: a fresh PlayScreen
         // is the cleanest reset, since the old one has a frozen field to unwind.
-        actions.push({ label: 'Replay', onTap: () => void this.context?.screens.start(SCREENS.Play, { stageId: stage.id }) });
+        // The tutorial is the exception — its beats are meant to be seen once,
+        // so a retry comes back through Menu → Play rather than this button.
+        if (!stage.tutorial) {
+            actions.push({ label: 'Replay', onTap: () => void this.context?.screens.start(SCREENS.Play, { stageId: stage.id }) });
+        }
         actions.push({ label: 'Menu', onTap: () => void this.context?.screens.start(SCREENS.MainMenu) });
 
         const lines = [
@@ -704,7 +700,7 @@ export class PlayScreen implements Screen<PlayParams> {
         // One click covers pause, resume and the ESC key, which are the same
         // action as far as the player is concerned.
         this.context?.audio.play(SFX.tap);
-        if (this.pauseOverlay) this.pauseOverlay.visible = next === 'paused';
+        this.pause?.setPaused(next === 'paused');
     }
 
     /** Restate the HUD from the current rules: the combo line, and the countdown if there is one. */
@@ -775,12 +771,7 @@ export class PlayScreen implements Screen<PlayParams> {
      */
     private updateEffects(dt: number): void {
         this.effects?.update(dt);
-
-        if (this.sweepFlashLeft > 0) {
-            this.sweepFlashLeft = Math.max(0, this.sweepFlashLeft - dt);
-            if (this.sweepFlash) this.sweepFlash.alpha = SWEEP_FLASH_PEAK * (this.sweepFlashLeft / SWEEP_FLASH_MS);
-        }
-
+        this.sweepWash?.update(dt);
         this.hud?.update(dt);
 
         // The field's kick is a composed component — ticked here only because
