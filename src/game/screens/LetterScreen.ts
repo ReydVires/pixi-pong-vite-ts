@@ -6,6 +6,7 @@ import { createSceneButton } from '../core/display/sceneButton';
 import { ScreenVeil } from '../core/display/veil';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
+import { markLetterOpened } from '../systems/progress';
 
 /** Vertical rhythm, top to bottom. */
 const TITLE_Y = 190;
@@ -35,6 +36,7 @@ export class LetterScreen implements Screen {
 
     init(context: ScreenContext, _params: void): void {
         const { world, ui, screens, responsive } = context;
+        markLetterOpened();
 
         // The same night sky as the celebration, minus the fireworks: the letter
         // is meant to be read, and a burst behind the words is only a flicker.

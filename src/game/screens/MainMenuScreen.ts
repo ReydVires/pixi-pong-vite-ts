@@ -7,13 +7,14 @@ import { createColorBackground, createTextureBackground } from '../core/display/
 import { createButton } from '../core/display/button';
 import { createImage } from '../core/display/image';
 import { createLabel } from '../core/display/label';
+import { createSceneButton } from '../core/display/sceneButton';
 import { createSoundToggle } from '../core/display/soundToggle';
 import { Entity } from '../core/entities/Entity';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import type { ViewportMetrics } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
-import { isTutorialDone, startingStageId } from '../systems/progress';
+import { isLetterOpened, isTutorialDone, startingStageId } from '../systems/progress';
 
 export class MainMenuScreen implements Screen {
     private readonly entities: Entity[] = [];
@@ -43,12 +44,21 @@ export class MainMenuScreen implements Screen {
             audio.play(SFX.tap);
             this.stopListening?.();
             this.stopListening = null;
-            // The tutorial is a one-time handshake — beaten once, and every
-            // later session starts at the first real stage instead.
             void screens.start(SCREENS.Play, { stageId: startingStageId() });
         }, { width: 340, height: 88, fontSize: 40 });
-        play.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 140);
+        play.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 100);
         ui.addChild(play);
+
+        if (isLetterOpened()) {
+            const letter = createSceneButton('Read the letter', () => {
+                audio.play(SFX.tap);
+                this.stopListening?.();
+                this.stopListening = null;
+                void screens.start(SCREENS.Letter);
+            });
+            letter.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y + 190);
+            ui.addChild(letter);
+        }
 
         // Top corner, away from the logo and the Play button. The toggle only
         // flips the mute; confirming the sound is back is the screen's job, so
