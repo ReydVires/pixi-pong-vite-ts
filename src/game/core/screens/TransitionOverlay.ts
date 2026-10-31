@@ -7,6 +7,8 @@ import type { Responsive } from '../responsive/Responsive';
 import type { Nullable } from '../types';
 
 const TRANSITION_LOADER_DELAY_MS = 160;
+/** Roughly one turn per second, in radians per millisecond. */
+const SPINNER_RADIANS_PER_MS = 0.006;
 
 export class TransitionOverlay {
     private loader: Nullable<Container> = null;
@@ -71,6 +73,6 @@ export class TransitionOverlay {
     }
 
     private readonly tick = (ticker: Ticker): void => {
-        if (this.spinner) this.spinner.rotation += ticker.deltaMS * 0.006;
+        if (this.spinner) this.spinner.rotation += ticker.deltaMS * SPINNER_RADIANS_PER_MS;
     };
 }

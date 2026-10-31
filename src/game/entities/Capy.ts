@@ -129,7 +129,7 @@ export class Capy extends Entity {
 
     /** Brief white flash so a tap feels answered even before points land. */
     flash(): void {
-        this.flashFx.flash();
+        this.flashFx.start();
     }
 
     /** Redraw the health pips after the hp changed. */

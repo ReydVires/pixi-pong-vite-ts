@@ -90,19 +90,22 @@ export const STAGES: readonly StageDef[] = [
         // First appearance of `golden`: it sweeps the whole field on its way
         // down, paying a flat bounty per capy whatever it caught — a bomb
         // included, so clearing a field you were avoiding is the big payout.
-        // It wears a crown so it reads before the first tap.
+        // It wears a crown so it reads before the first tap. The `runner` joins
+        // the mix here too, so a moving target is already on the board.
         id: 'stage-4',
         title: 'Stage 4',
         durationMs: 35_000,
         layout: 'hex',
         holes: 7,
-        // Stage 3's 3:1:1 scaled up by two, so the mix feels the same and the
-        // golden stays the rare treat — roughly one spawn in eleven.
+        // Stage 3's 3:1:1 scaled up by two, with a runner pair taking one of the
+        // normals, so the golden stays the rare treat — roughly one spawn in
+        // twelve.
         spawn: [
-            { type: 'normal', weight: 6 },
+            { type: 'normal', weight: 5 },
             { type: 'tough', weight: 2 },
             { type: 'bomb', weight: 2 },
             { type: 'golden', weight: 1 },
+            { type: 'runner', weight: 2 },
         ],
         spawnIntervalMs: [800, 1200],
         maxConcurrent: 4,
@@ -112,15 +115,15 @@ export const STAGES: readonly StageDef[] = [
         starThresholds: [140, 280, 440],
     },
     {
-        // First appearance of `runner`: the one capy that doesn't stay put.
-        // Two taps, but on a target that keeps changing holes — so the second
-        // one has to travel, and a tap where it used to be is a whiff.
+        // The runner's stage: the one capy that doesn't stay put. Two taps, but
+        // on a target that keeps changing holes — so the second one has to
+        // travel, and a tap where it used to be is a whiff.
         id: 'stage-5',
         title: 'Stage 5',
         durationMs: 35_000,
         layout: 'hex',
         holes: 7,
-        // Stage 4's mix with the runner folded in, so a moving target is a
+        // Stage 4's mix with the runner doubled, so a moving target is a
         // recurring threat rather than the whole stage.
         spawn: [
             { type: 'normal', weight: 6 },

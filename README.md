@@ -129,7 +129,7 @@ src/
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
     │   ├── audio/              AudioManager + synth — sound, with no files to ship
     │   ├── display/            Building blocks: background, button, sceneButton, image, label,
-    │   │                       overlay, ProgressBar, soundToggle, veil
+    │   │                       overlay, ProgressBar, soundToggle, fade, veil
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
     │   └── entities/           Entity + Component — composable per-frame behaviors
@@ -138,7 +138,8 @@ src/
     ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
     │                           TutorialRunner, TweenSystem, EffectsSystem, FireworksSystem,
     │                           PopupsSystem, HitTarget + the particles/fireworks math
-    ├── components/             Gameplay components: Emerge, Spin, Pulse, Flash, Shake
+    ├── components/             Gameplay components: Emerge, Spin, Pulse, Flash, Shake,
+    │                           DropIn, Punch, FlyOff, PopOut
     ├── entities/               Display actors: Hole, Capy, Gift + the capyFace drawing helper
     ├── ui/                     Composed presentation units a screen mounts and ticks:
     │                           PlayHud, ResultsPanel, PausePanel, WishPanel, SweepWash
@@ -309,8 +310,14 @@ update(dt: number): void {
 }
 ```
 
-A `Component` is any object with `update?(dt)` and/or `destroy?()` — see
+A `Component` is any object with `start?()`, `update?(dt)` and/or `destroy?()` — see
 `src/game/components/Spin.ts` for a ~30-line example to copy.
+
+Actors compose the same way. `Gift` owns no timers of its own: `DropIn` lands and hovers it,
+`Punch` runs the open beat, `FlyOff` takes the ribbon away and `PopOut` springs the capy out —
+the class is left with just the art it draws. One-shot behaviors expose `start()` and nothing
+else (`flash.start()`, `shake.start()`, `punch.start()`), so a host never has to remember a
+component-specific verb; `ScreenVeil` and `SweepWash` are the same idea with a shared `Fade`.
 
 ### 4. Config
 

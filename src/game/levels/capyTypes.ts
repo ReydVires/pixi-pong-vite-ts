@@ -5,7 +5,8 @@ import type { CapyType, CapyTypeId } from './types';
  *
  * `tough` and `runner` keep `staysWhenHit`, which is what makes "not every
  * capy goes straight back down after one whack" a rule rather than a special
- * case — `hp` decides how many whacks, the type decides whether it lingers.
+ * case — `hp` decides how many whacks, and the type decides whether it lingers
+ * (or, for a `runner`, relocates).
  *
  * Colours are placeholders for real art; they are read by the shapes drawn in
  * `entities/Capy.ts` and by the star bursts a whack throws in `PlayScreen`.
@@ -57,9 +58,13 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         id: 'runner',
         points: 20,
         hp: 2,
-        // The one type that *moves*: two short stays and two relocations
-        // between them, so the whack has to follow it across the board. Every
-        // other archetype is a decision about timing; this one is about aim.
+        // The one type that *moves*: every whack sends it to another hole, so
+        // the second tap has to travel. Every other archetype is a decision
+        // about timing; this one is about aim.
+        //
+        // A hurt runner with a hop left relocates straight away. This flag only
+        // comes into play once it is out of hops, when it lingers like a
+        // `tough` for a finishing tap.
         staysWhenHit: true,
         hops: 2,
         upMs: 650,

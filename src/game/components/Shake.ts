@@ -27,7 +27,7 @@ const SHAKE_Y_SCALE = 0.7;
  * ```ts
  * const field = new Entity();
  * const shake = field.addComponent(new Shake(field));
- * shake.kick(); // on a combo milestone
+ * shake.start(); // on a combo milestone
  * ```
  */
 export class Shake implements Component {
@@ -37,7 +37,7 @@ export class Shake implements Component {
     constructor(private readonly target: { x: number; y: number }) {}
 
     /** Start (or restart) the kick. */
-    kick(): void {
+    start(): void {
         this.left = SHAKE_MS;
         this.time = 0;
     }

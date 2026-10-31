@@ -37,7 +37,7 @@ const HOLE_RADIUS = 74;
 /** Taps aim at hole centres, not exact pixels — keep it generous for thumbs. */
 const TAP_RADIUS_SCALE = 1.1;
 /** How long a wounded capy stays put so it can be finished off, in ms. */
-const WOUND_GRACE_MS = 1500;
+const WOUND_GRACE_MS = 1250;
 /**
  * Countdown drain rate — how hard the clock presses. 1 = real time; 1.5 means
  * a stage authored as 60s runs out in 40s of wall clock. Lives here rather than
@@ -413,10 +413,14 @@ export class PlayScreen implements Screen<PlayParams> {
         this.spray(capy, downed ? HIT_BURST : SOFT_BURST);
 
         if (!downed) {
-            // Still ticking, so it gets a moment to be finished rather than
-            // slipping away between taps. A wounded `runner` spends that
-            // moment stood still — and hops the instant it is over.
-            if (capy.type.staysWhenHit) capy.emerge.retain(WOUND_GRACE_MS);
+            // A runner has somewhere else to be: the hit itself sends it to
+            // another hole, so the next tap has to travel. Everything else
+            // gets a grace window instead, so a wound can be finished off.
+            if (capy.canHop) {
+                capy.emerge.retreat();
+            } else if (capy.type.staysWhenHit) {
+                capy.emerge.retain(WOUND_GRACE_MS);
+            }
             return;
         }
 
@@ -596,14 +600,14 @@ export class PlayScreen implements Screen<PlayParams> {
      * Let a hopper come up in a different hole rather than let it go.
      *
      * It was already sinking — that is the only reason it is in hand — so all
-     * this changes is where it arrives, and the player's second tap has to
+     * this changes is where it arrives, and the player's next tap has to
      * travel rather than repeat. `false` means it really has gone, and the
      * caller books the escape it looked like.
      */
     private tryHop(capy: Capy): boolean {
-        // Only an *escape* can turn into a move. A settled capy was whacked (or
-        // swept), so it is on its way down for good — if this could hop, a
-        // finished runner would pop back up with no pips left.
+        // Settled means whacked (or swept) for good: it is on its way down and
+        // must not pop back up with no pips left. A wounded runner is not
+        // settled — its retreat is a move, not an escape.
         if (capy.isSettled || !capy.canHop) return false;
 
         // Nowhere to run to means the move is forfeit and it is simply gone.
@@ -732,7 +736,7 @@ export class PlayScreen implements Screen<PlayParams> {
         this.context?.audio.play(SFX.combo, { rate: 1 + (multiplier - 2) * 0.18 });
         // The three channels of one milestone: field kicks (a component), the
         // line punches and the ladder shouts (the HUD), and this — the sound.
-        this.shake?.kick();
+        this.shake?.start();
         this.hud?.shout(multiplier);
     }
 

@@ -8,12 +8,12 @@ const FLASH_MS = 140;
  * A brief white overlay so a tap feels answered even before points land.
  *
  * Composes onto any entity that draws a hit flash: the screen triggers it with
- * `flash()` and the component owns the countdown, the fade and the reset — the
+ * `start()` and the component owns the countdown, the fade and the reset — the
  * host doesn't need an `update()` override of its own.
  *
  * ```ts
  * const flash = entity.addComponent(new Flash(overlayGraphics));
- * flash.flash(); // on a hit
+ * flash.start(); // on a hit
  * ```
  */
 export class Flash implements Component {
@@ -22,7 +22,7 @@ export class Flash implements Component {
     constructor(private readonly overlay: Graphics) {}
 
     /** Start (or restart) the flash. */
-    flash(): void {
+    start(): void {
         this.left = FLASH_MS;
     }
 

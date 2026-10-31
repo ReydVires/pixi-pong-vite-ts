@@ -1,6 +1,8 @@
-import type { Container, Graphics } from 'pixi.js';
+import type { Container } from 'pixi.js';
 import { COLORS } from '../config';
 import { createColorBackground } from '../core/display/background';
+import { Fade } from '../core/display/fade';
+import { Entity } from '../core/entities/Entity';
 import type { Responsive } from '../core/responsive/Responsive';
 
 /** How long the wash takes to fade back out, in ms. */
@@ -18,26 +20,22 @@ const WASH_PEAK = 0.25;
  * before the first overlay, so pausing still dims over the top of it — and
  * left non-interactive, so it can never swallow a tap.
  */
-export class SweepWash {
-    private readonly view: Graphics;
-    /** Milliseconds left on the fade. */
-    private left = 0;
+export class SweepWash extends Entity {
+    private readonly fade: Fade;
 
     constructor(ui: Container, responsive: Responsive) {
-        this.view = createColorBackground(COLORS.star, responsive);
-        this.view.alpha = 0;
-        ui.addChild(this.view);
+        super();
+
+        this.addChild(createColorBackground(COLORS.star, responsive));
+        this.fade = this.addComponent(
+            new Fade(this, { from: WASH_PEAK, to: 0, ms: WASH_MS, autoPlay: false }),
+        );
+        this.alpha = 0;
+        ui.addChild(this);
     }
 
     /** Light the wash at full strength; it fades out over the next `WASH_MS`. */
     arm(): void {
-        this.left = WASH_MS;
-    }
-
-    /** Tick the fade. A no-op once the wash has burnt out. */
-    update(dt: number): void {
-        if (this.left <= 0) return;
-        this.left = Math.max(0, this.left - dt);
-        this.view.alpha = WASH_PEAK * (this.left / WASH_MS);
+        this.fade.start();
     }
 }
