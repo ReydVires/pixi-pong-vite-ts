@@ -3,10 +3,15 @@ import type { DestroyOptions } from 'pixi.js';
 import type { Component } from './component';
 
 /**
- * A display object that composes zero or more `Component` behaviors.
+ * A display object that hosts components — and nothing more.
  *
- * An entity only knows how to host and tick components — what it actually
- * *does* lives entirely in the components attached to it.
+ * The rule is strict: an entity never simulates on its own. Anything that
+ * changes over time lives in a component ticked by this class; a subclass only
+ * adds art and a domain API over its components. A screen that just needs a
+ * handle for components builds `new Entity()` rather than a subclass.
+ *
+ * If the entity has a lifetime its owner must poll, extend `OneShot` instead of
+ * overriding `update()` to report it.
  */
 export class Entity extends Container {
     private readonly components: Component[] = [];

@@ -1,7 +1,7 @@
 import type { Container } from 'pixi.js';
 import { COLORS } from '../config';
 import { createColorBackground } from '../core/display/background';
-import { Fade } from '../core/display/fade';
+import { Fade } from '../core/display/Fade';
 import { Entity } from '../core/entities/Entity';
 import type { Responsive } from '../core/responsive/Responsive';
 
@@ -15,7 +15,7 @@ const WASH_PEAK = 0.25;
  * up when a sweep fires it and fades back out over its own duration.
  *
  * Presentation only — `PlayScreen` owns the rule (a `clear` effect sweeps the
- * field) and simply calls `arm()`; the wash times itself, so the screen keeps
+ * field) and simply calls `fire()`; the wash times itself, so the screen keeps
  * no flash timer of its own. Mounted in `ui` right after the HUD chrome and
  * before the first overlay, so pausing still dims over the top of it — and
  * left non-interactive, so it can never swallow a tap.
@@ -35,7 +35,7 @@ export class SweepWash extends Entity {
     }
 
     /** Light the wash at full strength; it fades out over the next `WASH_MS`. */
-    arm(): void {
+    fire(): void {
         this.fade.start();
     }
 }

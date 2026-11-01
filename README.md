@@ -129,18 +129,19 @@ src/
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
     │   ├── audio/              AudioManager + synth — sound, with no files to ship
     │   ├── display/            Building blocks: background, button, sceneButton, image, label,
-    │   │                       overlay, ProgressBar, soundToggle, fade, veil
+    │   │                       overlay, ProgressBar, soundToggle, Fade, FadeCover
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
-    │   └── entities/           Entity + Component — composable per-frame behaviors
+    │   └── entities/           Entity, OneShot + Component — composable per-frame behaviors
     ├── audio/                  sfx — every sound the game makes, by name (data only)
     ├── levels/                 What spawns: capy archetypes + the stage table (data only)
     ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
     │                           TutorialRunner, TweenSystem, EffectsSystem, FireworksSystem,
     │                           PopupsSystem, HitTarget + the particles/fireworks math
     ├── components/             Gameplay components: Emerge, Spin, Pulse, Flash, Shake,
-    │                           DropIn, Punch, FlyOff, PopOut
-    ├── entities/               Display actors: Hole, Capy, Gift + the capyFace drawing helper
+    │                           DropIn, Punch, FlyOff, PopOut, Sparks, Ripple
+    ├── entities/               Display objects: Hole (scenery), Capy + Gift (actors),
+    │                           Burst + Shockwave (one-shots) + the capyFace drawing helper
     ├── ui/                     Composed presentation units a screen mounts and ticks:
     │                           PlayHud, ResultsPanel, PausePanel, WishPanel, SweepWash
     └── screens/                The navigable screens — orchestration + rules  ← most of your work happens here
@@ -313,11 +314,20 @@ update(dt: number): void {
 A `Component` is any object with `start?()`, `update?(dt)` and/or `destroy?()` — see
 `src/game/components/Spin.ts` for a ~30-line example to copy.
 
+The rule is strict: **an entity never simulates on its own**. Anything that changes over
+time lives in a component; a subclass only adds art and a domain API over those components
+(`Capy`, `Gift`). If you just need a handle for components, build `new Entity()` — that is
+how the playfield and the menu logo are made.
+
+Short-lived things — spark bursts, shockwaves, the fade cover — extend `OneShot`, an
+`Entity` that reports `finished`; the owner ticks it and drops it (see `EffectsSystem` and
+`tickCover`). They never remove themselves.
+
 Actors compose the same way. `Gift` owns no timers of its own: `DropIn` lands and hovers it,
 `Punch` runs the open beat, `FlyOff` takes the ribbon away and `PopOut` springs the capy out —
 the class is left with just the art it draws. One-shot behaviors expose `start()` and nothing
 else (`flash.start()`, `shake.start()`, `punch.start()`), so a host never has to remember a
-component-specific verb; `ScreenVeil` and `SweepWash` are the same idea with a shared `Fade`.
+component-specific verb; `FadeCover` and `SweepWash` are the same idea with a shared `Fade`.
 
 ### 4. Config
 

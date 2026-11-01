@@ -1,4 +1,5 @@
 import type { Container } from 'pixi.js';
+import type { OneShot } from '../core/entities/OneShot';
 import { Burst } from '../entities/Burst';
 import { Shockwave } from '../entities/Shockwave';
 import type { ShockwaveOptions } from '../entities/Shockwave';
@@ -8,54 +9,45 @@ import type { BurstOptions } from './particles';
  * Owns short-lived visual effects mounted into a Pixi container.
  *
  * Screens decide when and where effects happen; this system handles their
- * shared lifecycle: construction, ticking, and removal when finished.
+ * shared lifecycle: construction, ticking, and unmounting once `finished`.
+ * Every effect is a `OneShot`, so the two kinds need no separate lists.
  */
 export class EffectsSystem {
-    private readonly bursts: Burst[] = [];
-    private readonly shockwaves: Shockwave[] = [];
+    private readonly live: OneShot[] = [];
 
     constructor(private readonly layer: Container) {}
 
-    addBurst(color: number, options: BurstOptions): Burst {
-        const burst = new Burst(color, options);
-        this.layer.addChild(burst);
-        this.bursts.push(burst);
-        return burst;
+    addBurst(color: number, options: BurstOptions): void {
+        this.add(new Burst(color, options));
     }
 
-    addShockwave(options: ShockwaveOptions): Shockwave {
-        const shockwave = new Shockwave(options);
-        this.layer.addChild(shockwave);
-        this.shockwaves.push(shockwave);
-        return shockwave;
+    addShockwave(options: ShockwaveOptions): void {
+        this.add(new Shockwave(options));
     }
 
     update(dt: number): void {
-        this.updateList(this.bursts, dt);
-        this.updateList(this.shockwaves, dt);
-    }
-
-    destroy(): void {
-        this.destroyList(this.bursts);
-        this.destroyList(this.shockwaves);
-    }
-
-    private updateList<T extends Burst | Shockwave>(effects: T[], dt: number): void {
-        for (let index = effects.length - 1; index >= 0; index--) {
-            const effect = effects[index];
+        for (let index = this.live.length - 1; index >= 0; index--) {
+            const effect = this.live[index];
             effect.update(dt);
             if (!effect.finished) continue;
 
-            effect.destroy({ children: true });
-            effects.splice(index, 1);
+            this.drop(effect);
+            this.live.splice(index, 1);
         }
     }
 
-    private destroyList<T extends Burst | Shockwave>(effects: T[]): void {
-        for (const effect of effects) {
-            effect.removeFromParent();
-            effect.destroy({ children: true });
-        }
-        effects.length = 0;
+    destroy(): void {
+        for (const effect of this.live) this.drop(effect);
+        this.live.length = 0;
+    }
+
+    private add(effect: OneShot): void {
+        this.layer.addChild(effect);
+        this.live.push(effect);
+    }
+
+    private drop(effect: OneShot): void {
+        effect.removeFromParent();
+        effect.destroy({ children: true });
     }
 }

@@ -3,7 +3,7 @@
  *
  * No Pixi and no screen: a `Particle` is plain numbers and `advance()` is one
  * integration step, so the *feel* (how far, how fast, how long) can be reasoned
- * about and tested without a canvas. `Burst` is the display half that draws
+ * about and tested without a canvas. `Sparks` is the display half that draws
  * these, and `fireworks.ts` is the scheduling half.
  */
 
@@ -28,7 +28,7 @@ export interface BurstOptions {
     count: number;
     x: number;
     y: number;
-    /** Particle silhouette, rendered by `Burst`. @default 'circle' */
+    /** Particle silhouette, rendered by `Sparks`. @default 'circle' */
     shape?: 'circle' | 'star';
     /** Speed band in px/s. */
     speed: readonly [number, number];

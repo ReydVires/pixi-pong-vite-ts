@@ -4,7 +4,7 @@ import { SFX } from '../audio/sfx';
 import { CELEBRATION, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground } from '../core/display/background';
 import { createLabel } from '../core/display/label';
-import { ScreenVeil } from '../core/display/veil';
+import { FadeCover, tickCover } from '../core/display/FadeCover';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
 import { Gift, GIFT_Y, giftStartY } from '../entities/Gift';
@@ -34,7 +34,7 @@ export class CelebrationScreen implements Screen {
     private hint: Nullable<Text> = null;
     private wish: Nullable<WishPanel> = null;
     /** Black sheet the screen fades up from on arrival. */
-    private veil: Nullable<ScreenVeil> = null;
+    private cover: Nullable<FadeCover> = null;
 
     async init(context: ScreenContext, _params: void): Promise<void> {
         const { world, ui, assets, responsive } = context;
@@ -73,7 +73,7 @@ export class CelebrationScreen implements Screen {
         this.fireworks = new FireworksSystem(this.effects, responsive);
         this.fireworks.start();
 
-        this.veil = new ScreenVeil(ui, responsive);
+        this.cover = new FadeCover(ui, responsive);
 
         this.gift = await Gift.create(assets, {
             // Re-read every frame, so a resize mid-drop still falls in from
@@ -92,7 +92,7 @@ export class CelebrationScreen implements Screen {
 
         this.gift?.update(dt);
 
-        if (this.veil?.update(dt)) this.veil = null;
+        this.cover = tickCover(this.cover, dt);
 
         this.wish?.update(dt);
     }
@@ -105,7 +105,7 @@ export class CelebrationScreen implements Screen {
         this.gift = null;
         this.hint = null;
         this.wish = null;
-        this.veil = null;
+        this.cover = null;
     }
 
     // --- The present --------------------------------------------------------

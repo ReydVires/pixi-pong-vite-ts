@@ -3,7 +3,7 @@ import { CELEBRATION, COLORS, SCREENS, SCREEN_CENTER } from '../config';
 import { createColorBackground } from '../core/display/background';
 import { createLabel } from '../core/display/label';
 import { createSceneButton } from '../core/display/sceneButton';
-import { ScreenVeil } from '../core/display/veil';
+import { FadeCover, tickCover } from '../core/display/FadeCover';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
 import { markLetterOpened } from '../systems/progress';
@@ -32,7 +32,7 @@ const MENU_Y = 900;
  */
 export class LetterScreen implements Screen {
     /** Black sheet the screen fades up from on arrival. */
-    private veil: Nullable<ScreenVeil> = null;
+    private cover: Nullable<FadeCover> = null;
 
     init(context: ScreenContext, _params: void): void {
         const { world, ui, screens, responsive } = context;
@@ -78,14 +78,14 @@ export class LetterScreen implements Screen {
         menu.position.set(SCREEN_CENTER.x, MENU_Y);
         ui.addChild(menu);
 
-        this.veil = new ScreenVeil(ui, responsive);
+        this.cover = new FadeCover(ui, responsive);
     }
 
     update(dt: number): void {
-        if (this.veil?.update(dt)) this.veil = null;
+        this.cover = tickCover(this.cover, dt);
     }
 
     destroy(): void {
-        this.veil = null;
+        this.cover = null;
     }
 }

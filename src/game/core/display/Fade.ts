@@ -20,8 +20,9 @@ export interface FadeOptions {
  * A one-shot alpha fade, restartable with `start()`.
  *
  * Attached as a component so a display object can fade itself without owning a
- * clock: `ScreenVeil` fades a sheet up from black, `SweepWash` burns a tint off
- * the field, and both are an entity with this attached. The constructor only
+ * clock: `FadeCover` fades a black cover off on arrival, `SweepWash` burns a
+ * tint off the field, and both are an entity with this attached. The constructor
+ * only
  * writes alpha when it is about to play, so a sheet that is armed later stays
  * clear until then.
  */

@@ -482,7 +482,7 @@ export class PlayScreen implements Screen<PlayParams> {
             color: COLORS.star,
         });
         this.spray(resolved, SWEEP_BURST);
-        this.sweepWash?.arm();
+        this.sweepWash?.fire();
         this.popups?.add('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
 
         for (const capy of [...this.capys]) {
