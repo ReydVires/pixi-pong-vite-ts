@@ -6,10 +6,40 @@ import { createLabel } from '../core/display/label';
 const POPUP_MS = 700;
 /** How far a popup drifts upward per millisecond, in design units. */
 const RISE_SPEED = 0.05;
+/** How long the comic punch-in takes, in ms. */
+const PUNCH_MS = 150;
+/** Comic words start at this share of their resting size. */
+const PUNCH_FROM = 0.35;
+/** How far past resting size the punch overshoots. */
+const PUNCH_OVERSHOOT = 0.14;
+/** Share of a comic word's life spent at full size before it fades. */
+const PUNCH_HOLD_SHARE = 0.6;
+
+export interface PopupOptions {
+    /** Text colour. @default COLORS.star */
+    fill?: number;
+    /** @default 36 */
+    fontSize?: number;
+    /** Outline width in px. @default 3 */
+    strokeWidth?: number;
+    /** Total lifetime in ms. @default 700 */
+    lifeMs?: number;
+    /** Upward drift per ms. @default 0.05 */
+    rise?: number;
+    /** Scale in with an overshoot, the way a comic sound effect lands. */
+    punch?: boolean;
+    /** Rotation in radians. @default 0 */
+    tilt?: number;
+    /** Extra spacing between letters, in px. @default 0 */
+    letterSpacing?: number;
+}
 
 interface Popup {
     label: Text;
     life: number;
+    lifeMs: number;
+    rise: number;
+    punch: boolean;
 }
 
 /**
@@ -20,6 +50,10 @@ interface Popup {
  * the rise-and-fade each frame, and destruction once a popup plays out. That
  * keeps rise speed and fade identical for every popup in the game.
  *
+ * A popup either drifts (scores, callouts) or punches in (comic hit words,
+ * where the arrival is the point). Both share one lifetime owner, so a screen
+ * never has to tick a second text system.
+ *
  * Mirrors `EffectsSystem`: build it with the layer to draw into, then
  * `add(...)` / `update(dt)` / `destroy()`.
  */
@@ -29,27 +63,51 @@ export class PopupsSystem {
     constructor(private readonly layer: Container) {}
 
     /** Float `text` above `(x, y)`, rising and fading out. */
-    add(text: string, x: number, y: number, fill: number = COLORS.star, fontSize = 36): void {
+    add(text: string, x: number, y: number, options: PopupOptions = {}): void {
+        const {
+            fill = COLORS.star,
+            fontSize = 36,
+            strokeWidth = 3,
+            lifeMs = POPUP_MS,
+            rise = RISE_SPEED,
+            punch = false,
+            tilt = 0,
+            letterSpacing = 0,
+        } = options;
+
         const label = createLabel(text, {
             fontSize,
             fill,
-            stroke: { color: COLORS.black, width: 3 },
+            letterSpacing,
+            stroke: { color: COLORS.black, width: strokeWidth },
         });
         label.anchor.set(0.5);
         label.position.set(x, y);
+        label.rotation = tilt;
+        if (punch) label.scale.set(PUNCH_FROM);
 
         this.layer.addChild(label);
-        this.popups.push({ label, life: 0 });
+        this.popups.push({ label, life: 0, lifeMs, rise, punch });
     }
 
     update(dt: number): void {
         for (let i = this.popups.length - 1; i >= 0; i--) {
             const popup = this.popups[i];
             popup.life += dt;
-            popup.label.y -= RISE_SPEED * dt;
-            popup.label.alpha = Math.max(0, 1 - popup.life / POPUP_MS);
+            popup.label.y -= popup.rise * dt;
 
-            if (popup.life >= POPUP_MS) {
+            if (popup.punch) {
+                const punch = Math.min(1, popup.life / PUNCH_MS);
+                const grow = 1 - (1 - punch) ** 3;
+                const overshoot = Math.sin(punch * Math.PI) * PUNCH_OVERSHOOT;
+                popup.label.scale.set(PUNCH_FROM + (1 - PUNCH_FROM) * grow + overshoot);
+            }
+
+            const fadeFrom = popup.punch ? popup.lifeMs * PUNCH_HOLD_SHARE : 0;
+            const fade = Math.max(0, popup.life - fadeFrom) / (popup.lifeMs - fadeFrom);
+            popup.label.alpha = Math.max(0, 1 - fade);
+
+            if (popup.life >= popup.lifeMs) {
                 popup.label.destroy();
                 this.popups.splice(i, 1);
             }

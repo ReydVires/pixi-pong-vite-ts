@@ -19,7 +19,10 @@ const FLASH_MS = 140;
 export class Flash implements Component {
     private left = 0;
 
-    constructor(private readonly overlay: Graphics) {}
+    constructor(
+        private readonly overlay: Graphics,
+        private readonly onComplete?: () => void,
+    ) {}
 
     /** Start (or restart) the flash. */
     start(): void {
@@ -31,5 +34,6 @@ export class Flash implements Component {
 
         this.left = Math.max(0, this.left - dt);
         this.overlay.alpha = this.left / FLASH_MS;
+        if (this.left === 0) this.onComplete?.();
     }
 }

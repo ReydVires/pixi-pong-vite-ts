@@ -10,7 +10,7 @@ Tap capys as they pop out of a honeycomb of holes, build up your combo, and don'
 - 🎮 **Data-driven gameplay** — stages, capy archetypes and spawn logic live as pure data (`levels/`); Stage 2 introduces two simultaneous targets in separate holes
 - 🧠 **Explicit game state** — `PlayScreen` uses a single `PlayMode` (`playing` | `paused` | `finished`) with controlled transitions via `enter()` for predictable state
 - 🎯 **Centralised hit testing** — one pointer handler, honest accuracy accounting
-- 💥 **Juice without noise** — star-shaped whack bursts, a crowned golden capy, and combo milestones that kick the field and show comic words
+- 💥 **Juice without noise** — star-shaped whack bursts, comic hit words, a crowned golden capy, and combo milestones that kick the field and shout
 - 🔊 **Procedural audio** — synthesised SFX from `tone()`/`noise()` primitives, no audio files shipped
 - 🎨 **Component-based entities** — `Entity` + `Component` composition rather than deep inheritance, and composed UI units (`ui/`) rather than inline display code
 - 🖥️ **Responsive + safe-area aware** — uniform scaling with notch/home-indicator handling via `viewport.safeArea`
@@ -137,7 +137,7 @@ src/
     ├── levels/                 What spawns: capy archetypes + the stage table (data only)
     ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
     │                           TutorialRunner, TweenSystem, EffectsSystem, FireworksSystem,
-    │                           PopupsSystem, HitTarget + the particles/fireworks math
+    │                           PopupsSystem, HitWords, HitTarget + the particles/fireworks math
     ├── components/             Gameplay components: Emerge, Spin, Pulse, Flash, Shake,
     │                           DropIn, Punch, FlyOff, PopOut, Sparks, Ripple
     ├── entities/               Display objects: Hole (scenery), Capy + Gift (actors),
@@ -680,8 +680,10 @@ stretched, never cropped.
   the design bounds (the letterbox margins). Size full-bleed artwork to
   `responsive.visibleBounds` and it always covers the screen — `createColorBackground` /
   `createTextureBackground` already do this.
-- **`context.ui`** is drawn above the world. Keep interactive elements inside the 768×1024
-  design area so they stay on screen.
+- **`context.ui`** is drawn above the world. Keep interactive elements inside
+  `viewport.safeArea`, which is the part of the *screen* the hardware does not cover. On a
+  letterboxed viewport that rect extends past the design box, so top-anchored chrome can
+  follow the physical edge instead of floating in the margin.
 - **`Screen.onResize(viewport)`** fires on every resize/orientation change.
 - `viewport` exposes `scale`, `visible`, `visibleBounds`, `safeArea`, `orientation` (`portrait` /
   `landscape`) and `breakpoint` (`mobile` / `tablet` / `desktop`, measured by the shortest
@@ -708,13 +710,15 @@ the physical screen edges on a notched phone instead of being inset by iOS. That
 also runs *under* the notch, the Dynamic Island and the home indicator — which is what you want
 for a background, and not what you want for a button.
 
-`viewport.safeArea` is the design box minus those bands, expressed in **design units** (the CSS
-insets are divided by the current `scale` for you). UI that sits near an edge should use it:
+`viewport.safeArea` is the visible screen minus those bands, in **design units** (the CSS
+insets are divided by the current `scale` for you). It is measured from `visibleBounds`, so
+on a letterboxed viewport it starts *outside* the design box — exactly where a top-anchored
+control belongs:
 
 ```ts
-// Push a top-corner control clear of the notch. `safeArea` is clamped to the
-// design box, so this can only move it down — never off the top.
-control.position.set(GAME_WIDTH - 64, Math.max(64, responsive.safeArea.y + 64));
+// Follow the hardware edge, not the design box: on a tall phone the design box
+// is letterboxed, and anchoring to it strands the control mid-screen.
+control.position.set(GAME_WIDTH - 64, responsive.safeArea.y + 64);
 ```
 
 Two details worth knowing:
@@ -722,12 +726,12 @@ Two details worth knowing:
 - The insets come from the `--safe-top/right/bottom/left` CSS variables in `public/style.css`,
   read on every resize — rotating a phone moves the notch to a different edge, and the values
   swap with it.
-- The safe area is **intersected with the design box**, never expanded past it. A device whose
-  inset is larger than the letterbox margin clamps rather than inverting the rectangle, so a
-  control can't be pushed off screen by an aggressive inset.
+- `safeArea` can be larger than the design box because it covers the letterbox margins. Each
+  inset is clamped to half the visible dimension, so an aggressive notch can shrink the rect
+  but never invert it.
 
-Screens that don't opt in are unaffected: with no insets, `safeArea` is the whole design box and
-`Math.max(64, …)` returns its original value.
+Screens that don't opt in are unaffected: with no insets and no letterbox, `safeArea` is the
+design box, and `safeArea.y + 64` returns the original value.
 
 Want a different orientation? Swap `GAME_WIDTH` / `GAME_HEIGHT` in `config.ts` (e.g. `1024×768`
 for landscape) — everything else adapts automatically.

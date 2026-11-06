@@ -138,3 +138,21 @@ export const COMBO_WORDS: Record<number, string> = {
     14: 'KEEP UP!',
     20: 'UNBEATABLE!',
 };
+
+/**
+ * What a landed tap shouts, keyed by outcome.
+ *
+ * A hit is already answered with sparks, a flash and a score; the word is the
+ * sound effect the screen cannot play. `downed` is every finish, `wound` is a
+ * tough or runner that survived, and `hazard` is what tapping a bomb gets you.
+ * Each list is dealt in shuffled rounds, so variety is built in.
+ *
+ * Content, like `COMBO_WORDS`: edit the words, not the code.
+ */
+export const HIT_WORDS = {
+    downed: ['WHACK!', 'POW!', 'BOP!', 'BONK!', 'THWACK!', 'SMACK!', 'KAPOW!', 'WHAM!'],
+    wound: ['THUNK!', 'CLUNK!', 'DOINK!', 'TOK!'],
+    hazard: ['OUCH!', 'YOWCH!', 'BZZT!', 'ZAP!', 'BOOM!'],
+} as const;
+
+export type HitWordKind = keyof typeof HIT_WORDS;

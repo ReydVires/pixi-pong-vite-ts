@@ -1,4 +1,4 @@
-import type { Text } from 'pixi.js';
+import type { Container, Text } from 'pixi.js';
 import { SFX } from '../audio/sfx';
 import { Pulse } from '../components/Pulse';
 import { Spin } from '../components/Spin';
@@ -20,6 +20,7 @@ export class MainMenuScreen implements Screen {
     private readonly entities: Entity[] = [];
     private stopListening: Nullable<Unsubscribe> = null;
     private info: Nullable<Text> = null;
+    private sound: Nullable<Container> = null;
 
     init(context: ScreenContext, _params: void): void {
         const { world, ui, assets, screens, responsive, audio } = context;
@@ -64,17 +65,15 @@ export class MainMenuScreen implements Screen {
         // flips the mute; confirming the sound is back is the screen's job, so
         // the click is wired here rather than inside the button.
         //
-        // Pushed in from the hardware: at `y = 64` from the top edge it sits
-        // under a notched phone's Dynamic Island, and the safe area already
-        // accounts for the design scale. `ui` is documented to stay inside the
-        // design box, so the inset is clamped there rather than pushing the
-        // button off the top of it.
-        const sound = createSoundToggle(audio);
-        sound.position.set(GAME_WIDTH - 64, Math.max(64, responsive.safeArea.y + 64));
-        sound.on('pointerdown', () => {
+        // `layout` anchors it to `safeArea`, which follows the physical screen
+        // edge and the notch rather than the design box — on a tall phone the
+        // design box is letterboxed, and anchoring to it would strand the
+        // button well below the top.
+        this.sound = createSoundToggle(audio);
+        this.sound.on('pointerdown', () => {
             if (!audio.muted) audio.play(SFX.tap);
         });
-        ui.addChild(sound);
+        ui.addChild(this.sound);
 
         // A tiny blurb so first-time players know the tutorial is ahead — only
         // until it has actually been won; a returning player needs no forecast.
@@ -110,10 +109,13 @@ export class MainMenuScreen implements Screen {
         this.stopListening = null;
         this.entities.length = 0;
         this.info = null;
+        this.sound = null;
     }
 
-    /** Pin the status label to the bottom of the *visible* area, not the design area. */
+    /** Pin the chrome to the visible screen, not the centered design box. */
     private layout(viewport: ViewportMetrics): void {
+        this.sound?.position.set(GAME_WIDTH - 64, viewport.safeArea.y + 64);
+
         if (!this.info) return;
 
         const { visibleBounds } = viewport;

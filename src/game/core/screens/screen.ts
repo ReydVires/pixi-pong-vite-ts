@@ -20,7 +20,9 @@ export interface ScreenContext {
 
     /**
      * HUD/menu root, drawn above the world. Keep interactive elements inside
-     * the design area so they stay on screen. Destroyed automatically on transition.
+     * `responsive.safeArea` so they stay on screen; on a letterboxed viewport
+     * that rect extends past the design box, which is where edge-anchored
+     * chrome belongs. Destroyed automatically on transition.
      */
     readonly ui: Container;
 

@@ -82,33 +82,26 @@ export interface Insets {
 export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 
 /**
- * The design-space rectangle a screen's UI must stay inside to clear the
- * hardware, given the viewport's safe-area insets in CSS pixels.
+ * The visible screen minus the hardware bands, in design coordinates.
  *
- * The insets arrive in CSS pixels, but layout happens in design units, so each
- * one is divided by the current `scale`. The result is intersected with the
- * design box (0,0..`designWidth`,`designHeight`) because the UI layer is
- * documented to stay within the design area: a screen that shifts content for
- * the notch must not push it off the design box on a device whose inset is
- * larger than the letterbox margin. When that happens the intersection wins,
- * which clamps the safe area rather than letting it invert.
+ * The insets arrive in CSS pixels and layout happens in design units, so each is
+ * divided by the current `scale`. The rect is measured from `visibleBounds`, not
+ * from the design box: on a letterboxed viewport (a tall phone, a wide desktop)
+ * the screen extends past the design box, and edge-anchored chrome belongs out
+ * there with it. Clamping each inset to half the visible dimension keeps an
+ * aggressive notch from inverting the rectangle.
  */
-export function safeAreaRect(
-    insets: Insets,
-    scale: number,
-    designWidth: number,
-    designHeight: number,
-): Rect {
-    const top = Math.min(insets.top / scale, designHeight / 2);
-    const bottom = Math.min(insets.bottom / scale, designHeight / 2);
-    const left = Math.min(insets.left / scale, designWidth / 2);
-    const right = Math.min(insets.right / scale, designWidth / 2);
+export function safeAreaRect(insets: Insets, scale: number, visibleBounds: Rect): Rect {
+    const top = Math.min(insets.top / scale, visibleBounds.height / 2);
+    const bottom = Math.min(insets.bottom / scale, visibleBounds.height / 2);
+    const left = Math.min(insets.left / scale, visibleBounds.width / 2);
+    const right = Math.min(insets.right / scale, visibleBounds.width / 2);
 
     return {
-        x: left,
-        y: top,
-        width: designWidth - left - right,
-        height: designHeight - top - bottom,
+        x: visibleBounds.x + left,
+        y: visibleBounds.y + top,
+        width: visibleBounds.width - left - right,
+        height: visibleBounds.height - top - bottom,
     };
 }
 

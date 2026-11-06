@@ -1,9 +1,11 @@
 import { Container } from 'pixi.js';
 import { SFX } from '../audio/sfx';
 import { ASSETS, COLORS, SCREENS, SCREEN_CENTER } from '../config';
+import type { HitWordKind } from '../config';
 import { createColorBackground, createTextureBackground } from '../core/display/background';
 import type { OverlayAction } from '../core/display/overlay';
 import type { Unsubscribe } from '../core/input/PointerInput';
+import type { ViewportMetrics } from '../core/responsive/Responsive';
 import { holeSlots } from '../core/layout/hexLayout';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
@@ -20,6 +22,7 @@ import { findNextStage, findStage, isFinaleStage } from '../levels/stages';
 import type { CapyTypeId, StageDef } from '../levels/types';
 import { canAdvance } from '../systems/ScoreKeeper';
 import { ComboTracker } from '../systems/ComboTracker';
+import { HitWords } from '../systems/HitWords';
 import { markTutorialDone } from '../systems/progress';
 import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
 import type { TapOutcome } from '../systems/ScoreKeeper';
@@ -34,6 +37,8 @@ import { TutorialRunner } from '../systems/TutorialRunner';
 const GRID_CENTER_Y = 560;
 const HOLE_SPACING = 230;
 const HOLE_RADIUS = 74;
+/** Gap between a hole's rim and the score that floats above it, in design px. */
+const SCORE_LANE_GAP = 46;
 /** Taps aim at hole centres, not exact pixels — keep it generous for thumbs. */
 const TAP_RADIUS_SCALE = 1.1;
 /** How long a wounded capy stays put so it can be finished off, in ms. */
@@ -77,6 +82,18 @@ const SWEEP_POPUP_DROP = 96;
  * needs the most room.
  */
 const CLEAR_TITLE_LIFT = 58;
+/** How far above the score lane a comic hit word lands, in design px. */
+const HIT_WORD_LIFT = 54;
+/** Comic words arrive slightly off-square; ±8° reads as stamped, not sloppy. */
+const HIT_WORD_TILT = 0.14;
+/** Long enough to read once; short enough that a fast streak never builds a stack. */
+const HIT_WORD_MS = 560;
+/** Colour carries the outcome, the word carries the flavour. */
+const HIT_WORD_FILL: Record<HitWordKind, number> = {
+    downed: COLORS.star,
+    wound: COLORS.white,
+    hazard: COLORS.hazard,
+};
 
 export interface PlayParams {
     stageId: string;
@@ -123,6 +140,7 @@ export class PlayScreen implements Screen<PlayParams> {
 
     private readonly scoreKeeper = new ScoreKeeper();
     private readonly combo = new ComboTracker();
+    private readonly hitWords = new HitWords();
     private hits = 0;
     private misses = 0;
     private spawned = 0;
@@ -299,6 +317,12 @@ export class PlayScreen implements Screen<PlayParams> {
         this.updateEffects(dt);
     }
 
+    onResize(viewport: ViewportMetrics): void {
+        // Only the HUD's edge-anchored chrome moves; the field is centered by
+        // the ui layer's transform and its hole slots do not change.
+        this.hud?.layout(viewport);
+    }
+
     destroy(): void {
         this.stopTap?.();
         this.stopPauseKey?.();
@@ -388,7 +412,7 @@ export class PlayScreen implements Screen<PlayParams> {
         // only other sign is a combo label the player may not have had. The
         // tutorial is the exception — it introduces the verb, not the scolding,
         // so the red "Miss!" arrives with Stage 1. The tally still moves.
-        if (!this.stage?.tutorial) this.popups?.add('Miss!', x, y - 46, COLORS.hazard);
+        if (!this.stage?.tutorial) this.popups?.add('Miss!', x, y - 46, { fill: COLORS.hazard });
         // Only a tap makes a sound — an escape is the game's doing, not the
         // player's, so it stays silent however much it costs them.
         this.context?.audio.play(SFX.miss);
@@ -411,6 +435,10 @@ export class PlayScreen implements Screen<PlayParams> {
         // Every tap gets sparks; the finishing blow throws the bigger handful,
         // so a wound still reads as an event rather than a no-op.
         this.spray(capy, downed ? HIT_BURST : SOFT_BURST);
+
+        // A golden's shout is the sweep headline, so it does not also get a
+        // word here — two headlines above one hole would land on each other.
+        if (capy.type.effect !== 'clear') this.shoutHit(capy, downed ? 'downed' : 'wound');
 
         if (!downed) {
             // A runner has somewhere else to be: the hit itself sends it to
@@ -446,6 +474,7 @@ export class PlayScreen implements Screen<PlayParams> {
         capy.flash();
         capy.markSettled();
         this.spray(capy, SOFT_BURST, COLORS.hazard);
+        this.shoutHit(capy, 'hazard');
         this.bookOutcome(capy, tapOutcome(capy.type, this.combo.multiplier));
         capy.emerge.retreat();
     }
@@ -483,7 +512,10 @@ export class PlayScreen implements Screen<PlayParams> {
         });
         this.spray(resolved, SWEEP_BURST);
         this.sweepWash?.fire();
-        this.popups?.add('CLEAR!', x, y - HOLE_RADIUS - 46 - CLEAR_TITLE_LIFT, COLORS.star, 56);
+        this.popups?.add('CLEAR!', x, y - (HOLE_RADIUS + SCORE_LANE_GAP) - CLEAR_TITLE_LIFT, {
+            fill: COLORS.star,
+            fontSize: 56,
+        });
 
         for (const capy of [...this.capys]) {
             if (capy === resolved || !capy.emerge.hittable) continue;
@@ -755,12 +787,33 @@ export class PlayScreen implements Screen<PlayParams> {
         });
     }
 
+    /**
+     * The comic word for a landed tap.
+     *
+     * It rides the lane above the score, so the hit reads as a sound effect and
+     * the number as its receipt. `HitWords` deals each table in shuffled rounds,
+     * which is what keeps a streak from shouting "POW!" twice in a row.
+     */
+    private shoutHit(capy: Capy, kind: HitWordKind): void {
+        const { x, y } = capy.hole.slot;
+        this.popups?.add(this.hitWords.next(kind), x, y - (HOLE_RADIUS + SCORE_LANE_GAP) - HIT_WORD_LIFT, {
+            fill: HIT_WORD_FILL[kind],
+            fontSize: 46,
+            strokeWidth: 5,
+            letterSpacing: 2,
+            lifeMs: HIT_WORD_MS,
+            rise: 0.02,
+            punch: true,
+            tilt: (Math.random() * 2 - 1) * HIT_WORD_TILT,
+        });
+    }
+
     private spawnPopup(capy: Capy, points: number, drop = 0): void {
         this.popups?.add(
             `${points >= 0 ? '+' : ''}${points}`,
             capy.hole.slot.x,
-            capy.hole.slot.y - HOLE_RADIUS - 46 + drop,
-            points >= 0 ? COLORS.star : COLORS.hazard,
+            capy.hole.slot.y - (HOLE_RADIUS + SCORE_LANE_GAP) + drop,
+            { fill: points >= 0 ? COLORS.star : COLORS.hazard },
         );
     }
 

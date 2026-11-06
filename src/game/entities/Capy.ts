@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { Emerge } from '../components/Emerge';
 import { Flash } from '../components/Flash';
 import type { Nullable } from '../core/types';
@@ -7,6 +7,7 @@ import { COLORS } from '../config';
 import { Entity } from '../core/entities/Entity';
 import type { CapyType } from '../levels/types';
 import { drawCapyFace } from './capyFace';
+import type { CapyExpression } from './capyFace';
 import type { Hole } from './Hole';
 
 /**
@@ -26,9 +27,8 @@ const PIP_MIN_PROGRESS = 0.5;
  * it takes. Deciding what a tap *means* — points, hazards, clearing the field —
  * belongs to `PlayScreen`, which owns the stage rules.
  *
- * The body is drawn from rounded rectangles as a placeholder for real art;
- * swapping in a sprite later only touches `createBody()`. The face itself comes
- * from `drawCapyFace`, so the finale's present can hold the same capy.
+ * Its face is drawn with Pixi graphics from the supplied visual references;
+ * type-specific gameplay markers are layered on top.
  */
 export class Capy extends Entity {
     readonly type: CapyType;
@@ -48,6 +48,7 @@ export class Capy extends Entity {
     private movesLeft: number;
     private readonly headRadius: number;
     private readonly flashFx: Flash;
+    private readonly face: Graphics;
     private readonly pips: Graphics;
     private settled = false;
 
@@ -59,6 +60,7 @@ export class Capy extends Entity {
         this.hitTarget = new HitTarget(type);
         this.headRadius = hole.slot.radius * 0.7;
         this.movesLeft = type.hops ?? 0;
+        this.face = new Graphics();
 
         // Matches the blocky head + muzzle, so a hit flash doesn't ring past it.
         const r0 = this.headRadius;
@@ -73,7 +75,7 @@ export class Capy extends Entity {
         this.addChild(this.createBody(), flashOverlay, this.pips);
         // The flash is a composed behavior, not an `update()` override: the
         // component owns the countdown and the fade, this class only triggers it.
-        this.flashFx = this.addComponent(new Flash(flashOverlay));
+        this.flashFx = this.addComponent(new Flash(flashOverlay, () => this.setExpression('neutral')));
 
         // Must be attached, or `update()` never ticks it and the capy is
         // frozen at progress 0 — sunk, and unable to ever retreat.
@@ -129,6 +131,7 @@ export class Capy extends Entity {
 
     /** Brief white flash so a tap feels answered even before points land. */
     flash(): void {
+        this.setExpression('hit');
         this.flashFx.start();
     }
 
@@ -158,20 +161,23 @@ export class Capy extends Entity {
         this.pips.visible = progress >= PIP_MIN_PROGRESS;
     }
 
-    private createBody(): Graphics {
+    private createBody(): Container {
         const r = this.headRadius;
-        const body = new Graphics();
-
-        drawCapyFace(body, r, this.type);
+        const body = new Container();
+        drawCapyFace(this.face, r, this.type);
+        body.addChild(this.face);
 
         if (this.type.harmful) {
             // Warning marker above the skull, clear of the ears.
-            body.poly([0, -r * 1.15, r * 0.22, -r * 0.68, -r * 0.22, -r * 0.68], true).fill(COLORS.hazard);
+            const marker = new Graphics()
+                .poly([0, -r * 1.15, r * 0.22, -r * 0.68, -r * 0.22, -r * 0.68], true)
+                .fill(COLORS.hazard);
+            body.addChild(marker);
         } else if (this.type.effect === 'clear') {
             // Leave a 4px visual gap above the ear tips so the gold crown
             // remains distinct from the golden coat while staying centered.
             const crownLift = r * 0.27 + 4;
-            body
+            const crown = new Graphics()
                 .poly(
                     [
                         -r * 0.56, -r * 0.68 - crownLift,
@@ -185,11 +191,18 @@ export class Capy extends Entity {
                     true,
                 )
                 .fill(COLORS.star)
-                .stroke({ width: 3, color: this.type.accent });
-            body.roundRect(-r * 0.59, -r * 0.77 - crownLift, r * 1.18, r * 0.18, r * 0.05).fill(COLORS.star);
+                .stroke({ width: 3, color: this.type.accent })
+                .roundRect(-r * 0.59, -r * 0.77 - crownLift, r * 1.18, r * 0.18, r * 0.05)
+                .fill(COLORS.star);
+            body.addChild(crown);
         }
 
         return body;
+    }
+
+    private setExpression(expression: CapyExpression): void {
+        this.face.clear();
+        drawCapyFace(this.face, this.headRadius, this.type, expression);
     }
 
     /** Health pips above the head — only drawn for multi-hit capys. */

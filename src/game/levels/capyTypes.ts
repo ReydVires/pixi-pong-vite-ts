@@ -8,8 +8,10 @@ import type { CapyType, CapyTypeId } from './types';
  * case — `hp` decides how many whacks, and the type decides whether it lingers
  * (or, for a `runner`, relocates).
  *
- * Colours are placeholders for real art; they are read by the shapes drawn in
- * `entities/Capy.ts` and by the star bursts a whack throws in `PlayScreen`.
+ * Coats are sampled from the SansanPlanet reference art — rose-tan fur, coral,
+ * warm charcoal, orange and a muted lilac. They are read by the shapes drawn in
+ * `entities/Capy.ts` and by the star bursts a whack throws in `PlayScreen`, so
+ * each archetype keeps a hue the player can name at a glance.
  */
 export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
     normal: {
@@ -19,8 +21,8 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         staysWhenHit: false,
         upMs: 1500,
         emergeMs: 260,
-        color: 0xffd6a5,
-        accent: 0x4a3520,
+        color: 0xcd9a86,
+        accent: 0x2d2b2a,
     },
     tough: {
         id: 'tough',
@@ -29,8 +31,8 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         staysWhenHit: true,
         upMs: 2600,
         emergeMs: 300,
-        color: 0xff8fab,
-        accent: 0x4a3520,
+        color: 0xd86868,
+        accent: 0x2d2b2a,
     },
     bomb: {
         id: 'bomb',
@@ -40,8 +42,8 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         upMs: 1800,
         emergeMs: 260,
         harmful: true,
-        color: 0x3a3f4b,
-        accent: 0xff5a5f,
+        color: 0x2d2b2a,
+        accent: 0xd86868,
     },
     golden: {
         id: 'golden',
@@ -51,8 +53,8 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         upMs: 1600,
         emergeMs: 260,
         effect: 'clear',
-        color: 0xffd166,
-        accent: 0x8a5a00,
+        color: 0xe8a848,
+        accent: 0x675247,
     },
     runner: {
         id: 'runner',
@@ -71,7 +73,9 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         // Up and down faster than anything else: the hop is the tell, and a
         // slow rise or dive reads as the capy drifting rather than running.
         emergeMs: 180,
-        color: 0xc8b6ff,
-        accent: 0x4a3520,
+        // The reference has no purple, so the old lavender is kept at half its
+        // chroma: still the runner's, still quieter than the sampled hues.
+        color: 0xb7aed3,
+        accent: 0x2d2b2a,
     },
 };

@@ -17,7 +17,11 @@ export interface ViewportMetrics {
     readonly visible: Size;
     /** `visible` as a rectangle centered on the design area, in world coordinates. */
     readonly visibleBounds: Rect;
-    /** The design box minus the hardware's insets, in world coordinates. */
+    /**
+     * The visible screen minus the hardware's insets, in world coordinates.
+     * On a letterboxed viewport this extends past the design box — see
+     * `visibleBounds`.
+     */
     readonly safeArea: Rect;
     /** Detected viewport orientation. */
     readonly orientation: Orientation;
@@ -36,7 +40,8 @@ export interface ResponsiveEvents {
  * - `world`: gameplay/backdrop content. Shares the design coordinate space, but
  *   the *visible* area extends past the design bounds, so full-bleed artwork can
  *   fill the letterbox margins (see `visibleBounds`).
- * - `ui`: HUD/buttons drawn on top, always kept inside the design area.
+ * - `ui`: HUD/buttons drawn on top, kept inside `safeArea` — which may extend
+ *   into the letterbox margins on tall or wide screens.
  *
  * Both layers use the same uniform `containScale()`, which guarantees the whole
  * design area stays visible and undistorted on any screen.
@@ -79,7 +84,7 @@ export class Responsive extends EventEmitter<ResponsiveEvents> {
         return this.viewport.visibleBounds;
     }
 
-    /** The design box minus any hardware obstruction — where UI should sit. */
+    /** The visible screen minus any hardware obstruction — where edge-anchored UI should sit. */
     get safeArea(): Rect {
         return this.viewport.safeArea;
     }
@@ -177,7 +182,7 @@ export class Responsive extends EventEmitter<ResponsiveEvents> {
         // Re-read every pass, not once at attach: rotating a phone moves the
         // notch to a different edge, and the insets swap with it.
         const insets = readInsets(this.parent);
-        const safeArea = safeAreaRect(insets, scale, GAME_WIDTH, GAME_HEIGHT);
+        const safeArea = safeAreaRect(insets, scale, visibleBounds);
 
         // Map the design center onto the viewport center.
         const offsetX = width / 2 - (GAME_WIDTH / 2) * scale;

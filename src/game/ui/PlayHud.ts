@@ -3,7 +3,7 @@ import type { Text } from 'pixi.js';
 import { COLORS, COMBO_WORDS, GAME_WIDTH, SCREEN_CENTER } from '../config';
 import { createButton } from '../core/display/button';
 import { createLabel } from '../core/display/label';
-import type { Responsive } from '../core/responsive/Responsive';
+import type { Responsive, ViewportMetrics } from '../core/responsive/Responsive';
 import type { Nullable } from '../core/types';
 import { Easing, TweenSystem } from '../systems/TweenSystem';
 
@@ -63,6 +63,7 @@ export class PlayHud {
     private readonly comboLabel: Text;
     private readonly comboWord: Text;
     private readonly promptLabel: Text;
+    private readonly pauseButton: Container;
 
     /** Score currently shown on the HUD. */
     private displayedScore = 0;
@@ -81,34 +82,25 @@ export class PlayHud {
     constructor(ui: Container, responsive: Responsive, options: PlayHudOptions) {
         this.ui = ui;
 
-        // Nudge the whole top row clear of a notched phone's Dynamic Island. The
-        // safe area is in design units already, and clamped to the design box,
-        // so this can only ever move the row down — never off the top.
-        const rowY = Math.max(HUD_ROW_Y, responsive.safeArea.y + HUD_ROW_Y * 0.6);
-
         this.scoreLabel = createLabel('0', { fontSize: 52 });
         this.scoreLabel.anchor.set(0, 0.5);
-        this.scoreLabel.position.set(56, rowY);
+        this.scoreLabel.position.set(56, HUD_ROW_Y);
         ui.addChild(this.scoreLabel);
 
         this.timerRing = new Graphics();
-        this.timerRing.position.set(SCREEN_CENTER.x, rowY);
+        this.timerRing.position.set(SCREEN_CENTER.x, HUD_ROW_Y);
         this.timerRing.visible = false;
         ui.addChild(this.timerRing);
 
         this.timerLabel = createLabel('0', { fontSize: 52 });
         this.timerLabel.anchor.set(0.5, 0.5);
-        this.timerLabel.position.set(SCREEN_CENTER.x, rowY);
+        this.timerLabel.position.set(SCREEN_CENTER.x, HUD_ROW_Y);
         this.timerLabel.visible = false;
         ui.addChild(this.timerLabel);
 
-        // The combo line follows the row it hangs from, so the two cannot drift
-        // apart on a device that pushes the HUD down.
-        const comboY = COMBO_Y + (rowY - HUD_ROW_Y);
-
         this.comboLabel = createLabel('', { fontSize: 26, fill: COLORS.star });
         this.comboLabel.anchor.set(0.5, 0.5);
-        this.comboLabel.position.set(SCREEN_CENTER.x, comboY);
+        this.comboLabel.position.set(SCREEN_CENTER.x, COMBO_Y);
         ui.addChild(this.comboLabel);
 
         // The milestone's shout: the combo line's own spot, so the ladder's
@@ -121,7 +113,7 @@ export class PlayHud {
             stroke: { width: 5 },
         });
         this.comboWord.anchor.set(0.5, 0.5);
-        this.comboWord.position.set(SCREEN_CENTER.x, comboY);
+        this.comboWord.position.set(SCREEN_CENTER.x, COMBO_Y);
         this.comboWord.visible = false;
         ui.addChild(this.comboWord);
 
@@ -130,9 +122,33 @@ export class PlayHud {
         this.promptLabel.position.set(SCREEN_CENTER.x, 950);
         ui.addChild(this.promptLabel);
 
-        const pause = createButton('II', options.onPause, { width: 84, height: 62, fontSize: 26 });
-        pause.position.set(GAME_WIDTH - 72, rowY);
-        ui.addChild(pause);
+        this.pauseButton = createButton('II', options.onPause, { width: 84, height: 62, fontSize: 26 });
+        this.pauseButton.position.set(GAME_WIDTH - 72, HUD_ROW_Y);
+        ui.addChild(this.pauseButton);
+
+        // The top row hangs from the safe edge of the *screen*, not the design
+        // box, and is re-anchored on resize so rotation can't leave it behind.
+        this.layout(responsive.viewport);
+    }
+
+    /**
+     * Re-anchor the top row to the screen's safe area.
+     *
+     * `safeArea` starts at the physical edge of the screen, while the design box
+     * can sit inside a letterbox on a tall phone. Anchoring to the box would
+     * strand the score and pause button halfway down that phone; anchoring to
+     * the safe area keeps the same relationship to the hardware as on desktop.
+     */
+    layout(viewport: ViewportMetrics): void {
+        const rowY = viewport.safeArea.y + HUD_ROW_Y;
+        this.scoreLabel.y = rowY;
+        this.timerRing.y = rowY;
+        this.timerLabel.y = rowY;
+        this.pauseButton.y = rowY;
+
+        const comboY = viewport.safeArea.y + COMBO_Y;
+        this.comboLabel.y = comboY;
+        this.comboWord.y = comboY;
     }
 
     /** Show (or hide) the countdown label and ring — stages without a clock stay dark. */
