@@ -9,6 +9,16 @@ import type { Nullable } from '../core/types';
 
 export type CapyTypeId = 'normal' | 'tough' | 'bomb' | 'golden' | 'runner';
 
+/** The colours a capy's face uses while hurt, kept in that capy's own family. */
+export interface HurtPalette {
+    /** Open mouth interior. */
+    mouth: number;
+    /** Tongue inside the mouth. */
+    tongue: number;
+    /** Tears on the cheeks. */
+    tear: number;
+}
+
 /** How one capy archetype behaves and scores. */
 export interface CapyType {
     id: CapyTypeId;
@@ -40,6 +50,8 @@ export interface CapyType {
     color: number;
     /** Placeholder detail (eyes/snout) colour. */
     accent: number;
+    /** Hurt-expression colours, shaded to blend with this coat. */
+    hurt: HurtPalette;
 }
 
 /** A stage's spawn table: weighted picks from the archetypes it allows. */

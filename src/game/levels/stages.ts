@@ -38,7 +38,7 @@ export const STAGES: readonly StageDef[] = [
         layout: 'hex',
         holes: 4,
         spawn: [{ type: 'normal', weight: 1 }],
-        spawnIntervalMs: [900, 1300],
+        spawnIntervalMs: [800, 1200],
         maxConcurrent: 2,
         starThresholds: [60, 120, 300],
     },
@@ -57,7 +57,7 @@ export const STAGES: readonly StageDef[] = [
         ],
         // First regular stage with two capys allowed at once. Free-hole
         // selection guarantees they occupy different holes.
-        spawnIntervalMs: [800, 1200],
+        spawnIntervalMs: [700, 1100],
         maxConcurrent: 2,
         // Stage 1's thresholds scaled by duration (35/30s), spawn pace and
         // the 3:1 mix — the tough is worth 30 to a normal's 10.
@@ -77,7 +77,7 @@ export const STAGES: readonly StageDef[] = [
             { type: 'tough', weight: 1 },
             { type: 'bomb', weight: 1 },
         ],
-        spawnIntervalMs: [800, 1200],
+        spawnIntervalMs: [700, 1100],
         // Three at once, unlike Stage 2: a hazard only teaches anything if
         // there is something else to hit and a reason to hurry.
         maxConcurrent: 3,
@@ -107,7 +107,7 @@ export const STAGES: readonly StageDef[] = [
             { type: 'golden', weight: 1 },
             { type: 'runner', weight: 2 },
         ],
-        spawnIntervalMs: [800, 1200],
+        spawnIntervalMs: [700, 1100],
         maxConcurrent: 4,
         // Stage 3's, lifted ~18% for the free points a clear hands out on top
         // of its own score. A first guess — the golden is the least predictable
@@ -132,7 +132,7 @@ export const STAGES: readonly StageDef[] = [
             { type: 'golden', weight: 1 },
             { type: 'runner', weight: 3 },
         ],
-        spawnIntervalMs: [800, 1200],
+        spawnIntervalMs: [700, 1100],
         maxConcurrent: 5,
         // Stage 4's, lifted for the runner's 20 — and not lifted further,
         // because a runner that gets away pays nothing at all.

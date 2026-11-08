@@ -42,14 +42,18 @@ export function drawCapyFace(
     target.ellipse(-r * 0.43, r * 0.61, r * 0.07, r * 0.055).fill(darken(type.color, 0.22));
 
     if (expression === 'hit') {
+        // Each archetype brings its own shaded palette so the hurt face belongs
+        // to that coat instead of sitting on top of it.
+        const hurt = type.hurt;
+
         target.circle(-r * 0.42, -r * 0.4, r * 0.075).fill(outline);
         target.circle(r * 0.42, -r * 0.4, r * 0.075).fill(outline);
-        target.ellipse(-r * 0.53, -r * 0.12, r * 0.085, r * 0.17).fill(0xb9f2f4);
-        target.ellipse(r * 0.53, -r * 0.12, r * 0.085, r * 0.17).fill(0xb9f2f4);
+        target.ellipse(-r * 0.53, -r * 0.12, r * 0.085, r * 0.17).fill(hurt.tear);
+        target.ellipse(r * 0.53, -r * 0.12, r * 0.085, r * 0.17).fill(hurt.tear);
         target.ellipse(-r * 0.12, -r * 0.2, r * 0.055, r * 0.045).fill(outline);
         target.ellipse(r * 0.12, -r * 0.2, r * 0.055, r * 0.045).fill(outline);
-        target.ellipse(0, r * 0.1, r * 0.27, r * 0.32).fill(outline);
-        target.ellipse(0, r * 0.12, r * 0.17, r * 0.22).fill(0xf05e70);
+        target.ellipse(0, r * 0.1, r * 0.27, r * 0.32).fill(hurt.mouth);
+        target.ellipse(0, r * 0.12, r * 0.17, r * 0.22).fill(hurt.tongue);
     } else {
         target.circle(-r * 0.42, -r * 0.32, r * 0.075).fill(outline);
         target.circle(r * 0.42, -r * 0.32, r * 0.075).fill(outline);

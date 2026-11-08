@@ -11,7 +11,9 @@ import type { CapyType, CapyTypeId } from './types';
  * Coats are sampled from the SansanPlanet reference art — rose-tan fur, coral,
  * warm charcoal, orange and a muted lilac. They are read by the shapes drawn in
  * `entities/Capy.ts` and by the star bursts a whack throws in `PlayScreen`, so
- * each archetype keeps a hue the player can name at a glance.
+ * each archetype keeps a hue the player can name at a glance. Each archetype
+ * also carries a `hurt` palette shaded from that same hue, so the hit face
+ * blends with the coat instead of sitting on top of it.
  */
 export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
     normal: {
@@ -23,6 +25,7 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         emergeMs: 260,
         color: 0xcd9a86,
         accent: 0x2d2b2a,
+        hurt: { mouth: 0x8f6353, tongue: 0xd98f7d, tear: 0xead0c0 },
     },
     tough: {
         id: 'tough',
@@ -33,6 +36,7 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         emergeMs: 300,
         color: 0xd86868,
         accent: 0x2d2b2a,
+        hurt: { mouth: 0x9c4a4a, tongue: 0xdd8585, tear: 0xf0c0bd },
     },
     bomb: {
         id: 'bomb',
@@ -44,6 +48,7 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         harmful: true,
         color: 0x2d2b2a,
         accent: 0xd86868,
+        hurt: { mouth: 0x171110, tongue: 0x8a5550, tear: 0xb9a9a2 },
     },
     golden: {
         id: 'golden',
@@ -55,6 +60,7 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         effect: 'clear',
         color: 0xe8a848,
         accent: 0x675247,
+        hurt: { mouth: 0xb4762a, tongue: 0xe9b06b, tear: 0xf6d9a6 },
     },
     runner: {
         id: 'runner',
@@ -77,5 +83,6 @@ export const CAPY_TYPES: Record<CapyTypeId, CapyType> = {
         // chroma: still the runner's, still quieter than the sampled hues.
         color: 0xb7aed3,
         accent: 0x2d2b2a,
+        hurt: { mouth: 0x766b98, tongue: 0xc9bde2, tear: 0xe4ddf2 },
     },
 };
