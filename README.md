@@ -5,6 +5,8 @@ A **Whack-a-Mole**-style arcade game built with **[PixiJS 8](https://pixijs.com)
 
 Tap capys as they pop out of a honeycomb of holes, build up your combo, and don't whack the bombs! Clear stages to earn stars, make your way to the finale, and open the birthday present.
 
+> New to the codebase? Start with **[ARCHITECTURE.md](ARCHITECTURE.md)** — the map, the layers and the reading order.
+
 ## What you get out of the box
 
 - 🎮 **Data-driven gameplay** — stages, capy archetypes and spawn logic live as pure data (`levels/`); Stage 2 introduces two simultaneous targets in separate holes
@@ -191,8 +193,9 @@ The `ScreenContext` passed to `init()` is your toolbox:
 
 `ScreenManager` handles the transition details for you: it destroys the outgoing screen's
 containers and listeners before building the next one, and only ticks the active screen. Async
-screen factories are awaited; if loading takes longer than a brief delay, a blocking loading
-overlay appears and remains until the new screen's async `init()` completes.
+screen factories are awaited, and one loading overlay covers the whole transition — if either
+the screen's chunk download or its `init()` (asset loads) takes longer than a brief delay, the
+overlay appears and stays until the screen is ready.
 
 ### Passing data between screens
 

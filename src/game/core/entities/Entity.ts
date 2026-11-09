@@ -1,7 +1,6 @@
 import { Container } from 'pixi.js';
 import type { DestroyOptions } from 'pixi.js';
 import type { Component } from './component';
-
 /**
  * A display object that hosts components — and nothing more.
  *

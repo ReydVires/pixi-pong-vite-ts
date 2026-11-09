@@ -1,6 +1,5 @@
 import { SCREENS } from '../config';
 import type { ScreenManager } from '../core/screens/ScreenManager';
-import { CelebrationScreen } from './CelebrationScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 import { PreloaderScreen } from './PreloaderScreen';
 import type { PlayParams } from './PlayScreen';
@@ -36,7 +35,10 @@ export function registerScreens(screens: ScreenManager): void {
             const { PlayScreen } = await import('./PlayScreen');
             return new PlayScreen();
         })
-        .register(SCREENS.Celebration, async () => new CelebrationScreen())
+        .register(SCREENS.Celebration, async () => {
+            const { CelebrationScreen } = await import('./CelebrationScreen');
+            return new CelebrationScreen();
+        })
         .register(SCREENS.Letter, async () => {
             const { LetterScreen } = await import('./LetterScreen');
             return new LetterScreen();

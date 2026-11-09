@@ -64,10 +64,6 @@ export class TweenSystem {
         }
     }
 
-    cancel(key: string): void {
-        this.active.delete(key);
-    }
-
     clear(): void {
         this.active.clear();
     }

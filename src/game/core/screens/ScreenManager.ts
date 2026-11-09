@@ -47,22 +47,21 @@ export class ScreenManager {
         const id = ++this.transitionId;
         const isStale = () => this.transitionId !== id;
 
+        // One loader covers the whole transition: a slow chunk download *and*
+        // a slow `init()` (asset loads). The overlay only becomes visible
+        // after its delay, so quick transitions never flash it.
+        this.app.ticker.remove(this.tick);
+        this.overlay.arm(this.app, this.responsive, isStale);
+
         const result = (factory as ScreenFactory<ScreenRoutes[K] | undefined>)(params);
         let screen: Screen<never>;
 
-        if (result instanceof Promise) {
-            this.app.ticker.remove(this.tick);
-            this.overlay.arm(this.app, this.responsive, isStale);
-
-            try {
-                screen = (await result) as Screen<never>;
-            } catch (error) {
-                this.overlay.cancel();
-                if (!isStale() && this.current) this.app.ticker.add(this.tick);
-                throw error;
-            }
-        } else {
-            screen = result as Screen<never>;
+        try {
+            screen = (await (result instanceof Promise ? result : Promise.resolve(result))) as Screen<never>;
+        } catch (error) {
+            this.overlay.cancel();
+            if (!isStale() && this.current) this.app.ticker.add(this.tick);
+            throw error;
         }
 
         if (isStale()) {
@@ -70,8 +69,6 @@ export class ScreenManager {
             return;
         }
 
-        this.overlay.cancel();
-        this.overlay.hide(this.app);
         this.disposeCurrent();
 
         const world = new Container();
