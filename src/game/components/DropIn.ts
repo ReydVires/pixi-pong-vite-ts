@@ -1,5 +1,5 @@
-import type { Component } from '../core/entities/component';
-import { Easing } from '../systems/TweenSystem';
+import type { Component } from '../core/ecs/Component';
+import { Easing } from '../core/tween';
 
 /** What `DropIn` drives — anything with a vertical position. */
 export interface DropInTarget {

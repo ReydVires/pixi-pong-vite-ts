@@ -1,6 +1,6 @@
 import { Ripple } from '../components/Ripple';
 import type { RippleOptions } from '../components/Ripple';
-import { OneShot } from '../core/entities/OneShot';
+import { OneShot } from '../core/ecs/OneShot';
 
 export interface ShockwaveOptions extends RippleOptions {
     /** Centre in design/world units. */

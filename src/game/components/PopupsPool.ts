@@ -1,6 +1,7 @@
 import type { Container, Text } from 'pixi.js';
 import { COLORS } from '../config';
 import { createLabel } from '../core/display/label';
+import type { Component } from '../core/ecs/Component';
 
 /** Lifetime of a floating score popup, in ms. */
 const POPUP_MS = 700;
@@ -43,21 +44,17 @@ interface Popup {
 }
 
 /**
- * Owns short-lived floating labels mounted into a Pixi container.
+ * Holds the short-lived floating labels mounted into one layer.
  *
  * Screens decide *what* is shouted and *where* — a score at a hole, a "Miss!"
- * where the tap whiffed — this system handles the shared lifecycle: creation,
- * the rise-and-fade each frame, and destruction once a popup plays out. That
- * keeps rise speed and fade identical for every popup in the game.
+ * where the tap whiffed — the pool owns the shared lifecycle: creation, the
+ * rise-and-fade each frame, and destruction once a popup plays out. One pool for
+ * every popup keeps the pacing identical across the game.
  *
  * A popup either drifts (scores, callouts) or punches in (comic hit words,
- * where the arrival is the point). Both share one lifetime owner, so a screen
- * never has to tick a second text system.
- *
- * Mirrors `EffectsSystem`: build it with the layer to draw into, then
- * `add(...)` / `update(dt)` / `destroy()`.
+ * where the arrival is the point).
  */
-export class PopupsSystem {
+export class PopupsPool implements Component {
     private readonly popups: Popup[] = [];
 
     constructor(private readonly layer: Container) {}
@@ -114,7 +111,7 @@ export class PopupsSystem {
         }
     }
 
-    destroy(): void {
+    dispose(): void {
         for (const popup of this.popups) popup.label.destroy();
         this.popups.length = 0;
     }

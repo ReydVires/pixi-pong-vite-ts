@@ -4,11 +4,8 @@ export const Easing = {
     linear: (progress: number): number => progress,
     easeOutCubic: (progress: number): number => 1 - (1 - progress) ** 3,
     /**
-     * Overshoot-and-settle easing, so something lands with a bounce.
-     *
-     * `overshoot` is how far past the target it swings; the default is the
-     * usual subtle one, and things that are meant to spring (a capy popping out
-     * of a present) turn it up.
+     * Overshoot-and-settle, so something lands with a bounce. `overshoot` is how
+     * far past the target it swings; things meant to spring turn it up.
      */
     easeOutBack: (progress: number, overshoot = 1.70158): number => {
         return 1 + (overshoot + 1) * (progress - 1) ** 3 + overshoot * (progress - 1) ** 2;
@@ -36,11 +33,12 @@ interface ActiveTween extends TweenOptions {
 }
 
 /**
- * Advances keyed numeric tweens using the frame delta supplied by Pixi's
- * ticker. Starting a tween with an existing key replaces that tween, which
- * makes it straightforward to retarget animated values without stale work.
+ * Advances keyed numeric tweens using the frame delta from Pixi's ticker.
+ *
+ * Starting a tween with an existing key replaces it, so an animated value can be
+ * retargeted without leaving stale work behind.
  */
-export class TweenSystem {
+export class Tweens {
     private readonly active = new Map<string, ActiveTween>();
 
     to(key: string, from: number, to: number, options: TweenOptions): void {

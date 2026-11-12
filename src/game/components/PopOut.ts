@@ -1,6 +1,6 @@
 import type { Container } from 'pixi.js';
-import type { Component } from '../core/entities/component';
-import { Easing } from '../systems/TweenSystem';
+import type { Component } from '../core/ecs/Component';
+import { Easing } from '../core/tween';
 
 export interface PopOutOptions {
     /** Local y the target rests at once it has popped out. */

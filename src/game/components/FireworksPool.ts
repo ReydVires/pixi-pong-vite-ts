@@ -1,8 +1,9 @@
 import { COLORS } from '../config';
+import type { Component } from '../core/ecs/Component';
 import type { Responsive } from '../core/responsive/Responsive';
-import type { EffectsSystem } from './EffectsSystem';
-import { FIREWORK_COLORS, nextFirework } from './fireworks';
-import type { Firework } from './fireworks';
+import { FIREWORK_COLORS, nextFirework } from '../rules/fireworks';
+import type { Firework } from '../rules/fireworks';
+import type { EffectsPool } from './EffectsPool';
 
 /** Share of the visible height fireworks may use — the rest is the ground. */
 const SKY_FRACTION = 0.55;
@@ -20,22 +21,19 @@ const VOLLEY_BURST = { count: 26, speed: [180, 620], lifeMs: [500, 1100], size: 
 /**
  * Keeps a sky full of fireworks going, and fires the present's opening volley.
  *
- * Pure scheduling: each `update(dt)` counts down to the next burst and throws
- * it through the `EffectsSystem` it was built with — the screen owns that
- * system's layer and lifecycle. The schedule is drawn fresh from the viewport
- * after every burst, so the sky is always sprinkled over the *current* visible
- * area, letterbox margins included.
- *
- * Mirrors the other systems' shape: `start()` once, `update(dt)` every frame,
- * `volley(x, y)` when something worth celebrating happens.
+ * Pure scheduling: each `update(dt)` counts down to the next burst and throws it
+ * through the `EffectsPool` it was built with — the host owns that pool's layer
+ * and lifecycle. The schedule is drawn fresh from the viewport after every
+ * burst, so the sky is always sprinkled over the *current* visible area,
+ * letterbox margins included.
  */
-export class FireworksSystem {
+export class FireworksPool implements Component {
     /** The next firework to set off, and the wait before it. */
     private firework: Firework = { delayMs: 0, x: 0, y: 0, color: COLORS.white };
     private pending = 0;
 
     constructor(
-        private readonly effects: EffectsSystem,
+        private readonly effects: EffectsPool,
         private readonly responsive: Responsive,
     ) {}
 

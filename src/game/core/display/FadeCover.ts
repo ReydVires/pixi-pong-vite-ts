@@ -1,6 +1,6 @@
 import type { Container } from 'pixi.js';
 import { COLORS } from '../../config';
-import { OneShot } from '../entities/OneShot';
+import { OneShot } from '../ecs/OneShot';
 import type { Responsive } from '../responsive/Responsive';
 import type { Nullable } from '../types';
 import { createColorBackground } from './background';

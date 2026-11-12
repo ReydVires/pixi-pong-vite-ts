@@ -1,6 +1,6 @@
 import { Sparks } from '../components/Sparks';
-import { OneShot } from '../core/entities/OneShot';
-import type { BurstOptions } from '../systems/particles';
+import { OneShot } from '../core/ecs/OneShot';
+import type { BurstOptions } from '../rules/particles';
 
 /**
  * A one-shot cloud of confetti-coloured particles.

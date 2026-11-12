@@ -9,12 +9,12 @@ import { createImage } from '../core/display/image';
 import { createLabel } from '../core/display/label';
 import { createSceneButton } from '../core/display/sceneButton';
 import { createSoundToggle } from '../core/display/soundToggle';
-import { Entity } from '../core/entities/Entity';
+import { Entity } from '../core/ecs/Entity';
 import type { Unsubscribe } from '../core/input/PointerInput';
 import type { ViewportMetrics } from '../core/responsive/Responsive';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
-import { isLetterOpened, isTutorialDone, startingStageId } from '../systems/progress';
+import { isLetterOpened, isTutorialDone, startingStageId } from '../rules/progress';
 
 export class MainMenuScreen implements Screen {
     private readonly entities: Entity[] = [];

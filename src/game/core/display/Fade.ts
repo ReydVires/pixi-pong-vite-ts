@@ -1,4 +1,4 @@
-import type { Component } from '../entities/component';
+import type { Component } from '../ecs/Component';
 
 /** Anything with an alpha channel — a Container, a Sprite, a Graphics. */
 export interface FadeTarget {

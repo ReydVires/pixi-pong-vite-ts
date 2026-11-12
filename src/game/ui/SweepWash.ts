@@ -2,7 +2,7 @@ import type { Container } from 'pixi.js';
 import { COLORS } from '../config';
 import { createColorBackground } from '../core/display/background';
 import { Fade } from '../core/display/Fade';
-import { Entity } from '../core/entities/Entity';
+import { Entity } from '../core/ecs/Entity';
 import type { Responsive } from '../core/responsive/Responsive';
 
 /** How long the wash takes to fade back out, in ms. */

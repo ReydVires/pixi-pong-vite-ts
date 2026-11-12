@@ -4,7 +4,7 @@ import { COLORS } from '../config';
 import { createOverlay } from '../core/display/overlay';
 import type { OverlayAction, OverlayOptions } from '../core/display/overlay';
 import type { Responsive } from '../core/responsive/Responsive';
-import { Easing, TweenSystem } from '../systems/TweenSystem';
+import { Easing, Tweens } from '../core/tween';
 
 /** Star row of the results panel: outer/inner radius of one point. */
 const STAR_OUTER = 30;
@@ -38,7 +38,7 @@ export interface ResultsSpec {
  */
 export class ResultsPanel {
     readonly overlay: Container;
-    private readonly tweens = new TweenSystem();
+    private readonly tweens = new Tweens();
 
     constructor(responsive: Responsive, spec: ResultsSpec) {
         const options: OverlayOptions = {

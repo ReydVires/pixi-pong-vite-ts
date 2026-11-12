@@ -1,8 +1,8 @@
 import { Graphics } from 'pixi.js';
 import type { Container } from 'pixi.js';
-import type { Component } from '../core/entities/component';
-import { advance, alphaOf, burst as makeParticles } from '../systems/particles';
-import type { BurstOptions, Particle } from '../systems/particles';
+import type { Component } from '../core/ecs/Component';
+import { advance, alphaOf, burst as makeParticles } from '../rules/particles';
+import type { BurstOptions, Particle } from '../rules/particles';
 
 /**
  * A one-shot cloud of confetti-coloured particles, drawn into a single

@@ -1,5 +1,5 @@
 import type { Container } from 'pixi.js';
-import type { Component } from '../core/entities/component';
+import type { Component } from '../core/ecs/Component';
 
 export interface FlyOffOptions {
     /** How far the target rises by the end, in px. */

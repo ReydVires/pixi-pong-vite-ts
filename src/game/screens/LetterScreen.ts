@@ -6,7 +6,7 @@ import { createSceneButton } from '../core/display/sceneButton';
 import { FadeCover, tickCover } from '../core/display/FadeCover';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
-import { markLetterOpened } from '../systems/progress';
+import { markLetterOpened } from '../rules/progress';
 
 /** Vertical rhythm, top to bottom. */
 const TITLE_Y = 190;

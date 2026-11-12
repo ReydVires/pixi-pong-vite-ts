@@ -16,22 +16,22 @@ import { SweepWash } from '../ui/SweepWash';
 import { Hole } from '../entities/Hole';
 import { Capy } from '../entities/Capy';
 import { Shake } from '../components/Shake';
-import { Entity } from '../core/entities/Entity';
+import { Entity } from '../core/ecs/Entity';
 import { CAPY_TYPES } from '../levels/capyTypes';
 import { findNextStage, findStage, isFinaleStage } from '../levels/stages';
 import type { CapyTypeId, StageDef } from '../levels/types';
-import { canAdvance } from '../systems/ScoreKeeper';
-import { ComboTracker } from '../systems/ComboTracker';
-import { HitWords } from '../systems/HitWords';
-import { markTutorialDone } from '../systems/progress';
-import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../systems/ScoreKeeper';
-import type { TapOutcome } from '../systems/ScoreKeeper';
-import { EffectsSystem } from '../systems/EffectsSystem';
-import { PopupsSystem } from '../systems/PopupsSystem';
-import { pickSpawn, Spawner } from '../systems/Spawner';
-import type { BurstOptions } from '../systems/particles';
-import { SessionClock, secondsRemaining } from '../systems/SessionClock';
-import { TutorialRunner } from '../systems/TutorialRunner';
+import { canAdvance } from '../rules/ScoreKeeper';
+import { ComboTracker } from '../rules/ComboTracker';
+import { HitWords } from '../rules/HitWords';
+import { markTutorialDone } from '../rules/progress';
+import { ScoreKeeper, starsFor, SWEEP_POINTS, tapOutcome } from '../rules/ScoreKeeper';
+import type { TapOutcome } from '../rules/ScoreKeeper';
+import { EffectsPool } from '../components/EffectsPool';
+import { PopupsPool } from '../components/PopupsPool';
+import { pickSpawn, Spawner } from '../rules/Spawner';
+import type { BurstOptions } from '../rules/particles';
+import { SessionClock, secondsRemaining } from '../rules/SessionClock';
+import { TutorialRunner } from '../rules/TutorialRunner';
 
 /** Centre of the honeycomb in design units — leaves room for HUD and prompt. */
 const GRID_CENTER_Y = 560;
@@ -176,8 +176,8 @@ export class PlayScreen implements Screen<PlayParams> {
         this.state = next;
     }
 
-    private popups: Nullable<PopupsSystem> = null;
-    private effects: Nullable<EffectsSystem> = null;
+    private popups: Nullable<PopupsPool> = null;
+    private effects: Nullable<EffectsPool> = null;
     /** Everything the playfield is made of, so a milestone can kick all of it. */
     private field: Nullable<Entity> = null;
     /** The field's kick, composed as a component rather than timed by the screen. */
@@ -227,17 +227,18 @@ export class PlayScreen implements Screen<PlayParams> {
 
         // Effects sit above the holes — a whack's sparks should cover the mound
         // they came out of — but below the popups, so a floating score is never
-        // buried under its own explosion.
+        // buried under its own explosion. Both are components of `field`, so
+        // ticking the field ticks them.
         const fxLayer = new Container();
         this.field.addChild(fxLayer);
-        this.effects = new EffectsSystem(fxLayer);
+        this.effects = this.field.addComponent(new EffectsPool(fxLayer));
 
         // Added last on purpose: score popups float above the mound they rise
         // from. Adding this layer before the holes tucks every "+10" behind
         // the hole, so it vanishes as soon as it drifts over one.
         const popupLayer = new Container();
         this.field.addChild(popupLayer);
-        this.popups = new PopupsSystem(popupLayer);
+        this.popups = this.field.addComponent(new PopupsPool(popupLayer));
 
         this.hud = new PlayHud(ui, responsive, { onPause: () => this.togglePause() });
 
@@ -313,7 +314,6 @@ export class PlayScreen implements Screen<PlayParams> {
 
         for (const capy of this.capys) capy.update(dt);
         this.flushRetired();
-        this.popups?.update(dt);
         this.updateEffects(dt);
     }
 
@@ -329,9 +329,9 @@ export class PlayScreen implements Screen<PlayParams> {
         this.stopTap = null;
         this.stopPauseKey = null;
 
-        this.popups?.destroy();
+        // The effects and popup pools are components of `field`; the world
+        // teardown disposes them along with it.
         this.popups = null;
-        this.effects?.destroy();
         this.effects = null;
         this.pendingRetirement.length = 0;
         this.capys.length = 0;
@@ -827,12 +827,11 @@ export class PlayScreen implements Screen<PlayParams> {
      * every frame once the countdown is gone.
      */
     private updateEffects(dt: number): void {
-        this.effects?.update(dt);
         this.sweepWash?.update(dt);
         this.hud?.update(dt);
 
-        // The field's kick is a composed component — ticked here only because
-        // this is the loop guaranteed to run every frame.
+        // The field hosts the effects pool, the popups pool and its own kick —
+        // ticked here because this is the loop guaranteed to run every frame.
         this.field?.update(dt);
     }
 }

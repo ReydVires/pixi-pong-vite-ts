@@ -1,18 +1,19 @@
 import type { Container } from 'pixi.js';
-import type { OneShot } from '../core/entities/OneShot';
+import type { Component } from '../core/ecs/Component';
+import { OneShot } from '../core/ecs/OneShot';
 import { Burst } from '../entities/Burst';
 import { Shockwave } from '../entities/Shockwave';
 import type { ShockwaveOptions } from '../entities/Shockwave';
-import type { BurstOptions } from './particles';
+import type { BurstOptions } from '../rules/particles';
 
 /**
- * Owns short-lived visual effects mounted into a Pixi container.
+ * Holds the short-lived visual effects mounted into one layer.
  *
- * Screens decide when and where effects happen; this system handles their
- * shared lifecycle: construction, ticking, and unmounting once `finished`.
- * Every effect is a `OneShot`, so the two kinds need no separate lists.
+ * Screens decide when and where an effect happens; the pool owns the shared
+ * lifecycle — construction, ticking, and unmounting once `finished`. Every
+ * effect is a `OneShot`, so bursts and shockwaves need no separate lists.
  */
-export class EffectsSystem {
+export class EffectsPool implements Component {
     private readonly live: OneShot[] = [];
 
     constructor(private readonly layer: Container) {}
@@ -36,7 +37,7 @@ export class EffectsSystem {
         }
     }
 
-    destroy(): void {
+    dispose(): void {
         for (const effect of this.live) this.drop(effect);
         this.live.length = 0;
     }

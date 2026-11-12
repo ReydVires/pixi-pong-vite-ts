@@ -82,9 +82,9 @@ The game follows a **composition + data-driven** design:
 
 - **Screens** (`screens/`) are navigable game states and nothing else — they own the lifecycle and orchestration (Preloader, MainMenu, Play, Celebration, Letter) and keep the *rules*: when a stage ends, what a tap means, which screen comes next
 - **UI units** (`ui/`) are composed presentation pieces a screen mounts and ticks: `PlayHud`, `ResultsPanel`, `PausePanel`, `WishPanel`, `SweepWash`. Spec in, callbacks out — they never navigate or score on their own
-- **Systems** (`systems/`) hold reusable logic: pure rules (timing, scoring, combos, spawning, the tutorial) plus focused runtime services such as tweens, particles and Pixi effect lifecycles
-- **Entities + Components** (`entities/`, `components/`) compose display objects with behaviours (`Hole`, `Capy`, `Gift`, `Emerge`, `Spin`, `Shake`, etc.)
-- **Core plumbing** (`core/`) is reusable engine code (screens, input, assets, audio, display, responsive, layout)
+- **Rules** (`rules/`) are plain game logic with no Pixi: scoring, combos, the clock, spawning, the tutorial, plus the particles/fireworks math and progress persistence
+- **Entities + Components** (`entities/`, `components/`) compose display objects with behaviours: objects like `Hole`, `Capy`, `Gift`; behaviours like `Emerge`, `Spin`, `Shake`; and the pools that own short-lived effects (`EffectsPool`, `PopupsPool`, `FireworksPool`)
+- **Core plumbing** (`core/`) is reusable engine code (ecs, screens, input, assets, audio, display, responsive, layout, tween)
 - **Data** (`levels/`, `config.ts`, `audio/sfx.ts`) drives content; code drives behaviour
 
 ## Load time & code splitting
@@ -126,6 +126,7 @@ src/
     ├── Game.ts                 Composition root: creates the app + services, starts first screen
     ├── config.ts               Resolution, colors, screen keys, asset + audio settings, celebration data
     ├── core/                   Reusable engine plumbing (you rarely edit this)
+    │   ├── ecs/                Entity, OneShot + Component — composable per-frame behaviors
     │   ├── screens/            Screen interface + ScreenManager (lifecycle/transitions)
     │   ├── input/              PointerInput + KeyboardInput — screen-scoped input
     │   ├── assets/             AssetLoader — texture + web-font registry with progress
@@ -134,18 +135,20 @@ src/
     │   │                       overlay, ProgressBar, soundToggle, Fade, FadeCover
     │   ├── responsive/         Responsive — viewport scaling, orientation, breakpoints
     │   ├── layout/             hexLayout — pure hole-placement math (honeycomb / grid)
-    │   └── entities/           Entity, OneShot + Component — composable per-frame behaviors
+    │   └── tween.ts            Tweens + Easing — keyed numeric interpolation
     ├── audio/                  sfx — every sound the game makes, by name (data only)
     ├── levels/                 What spawns: capy archetypes + the stage table (data only)
-    ├── systems/                Reusable logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
-    │                           TutorialRunner, TweenSystem, EffectsSystem, FireworksSystem,
-    │                           PopupsSystem, HitWords, HitTarget + the particles/fireworks math
+    ├── rules/                  Game logic: SessionClock, ScoreKeeper, ComboTracker, Spawner,
+    │                           TutorialRunner, HitWords, HitTarget + the particles/fireworks
+    │                           math and progress persistence
     ├── components/             Gameplay components: Emerge, Spin, Pulse, Flash, Shake,
-    │                           DropIn, Punch, FlyOff, PopOut, Sparks, Ripple
+    │                           DropIn, Punch, FlyOff, PopOut, Sparks, Ripple + the pools
+    │                           EffectsPool, PopupsPool, FireworksPool
     ├── entities/               Display objects: Hole (scenery), Capy + Gift (actors),
     │                           Burst + Shockwave (one-shots) + the capyFace drawing helper
     ├── ui/                     Composed presentation units a screen mounts and ticks:
-    │                           PlayHud, ResultsPanel, PausePanel, WishPanel, SweepWash
+    │                           PlayHud (+ ScoreView/TimerView/ComboView), ResultsPanel,
+    │                           PausePanel, WishPanel, SweepWash
     └── screens/                The navigable screens — orchestration + rules  ← most of your work happens here
         ├── index.ts            Registers every screen (Play + Letter load as async chunks)
         ├── PreloaderScreen.ts  Loads assets behind a progress bar
@@ -294,7 +297,7 @@ An `Entity` is a display object (a `Container`) that hosts small behaviors calle
 `Component`s. Instead of subclassing, you mix behaviors onto an entity at runtime:
 
 ```ts
-import { Entity } from '../core/entities/Entity';
+import { Entity } from '../core/ecs/Entity';
 import { createImage } from '../core/display/image';
 import { Spin } from '../components/Spin';
 
@@ -314,7 +317,7 @@ update(dt: number): void {
 }
 ```
 
-A `Component` is any object with `start?()`, `update?(dt)` and/or `destroy?()` — see
+A `Component` is any object with `start?()`, `update?(dt)` and/or `dispose?()` — see
 `src/game/components/Spin.ts` for a ~30-line example to copy.
 
 The rule is strict: **an entity never simulates on its own**. Anything that changes over
@@ -323,7 +326,7 @@ time lives in a component; a subclass only adds art and a domain API over those 
 how the playfield and the menu logo are made.
 
 Short-lived things — spark bursts, shockwaves, the fade cover — extend `OneShot`, an
-`Entity` that reports `finished`; the owner ticks it and drops it (see `EffectsSystem` and
+`Entity` that reports `finished`; the owner ticks it and drops it (see `EffectsPool` and
 `tickCover`). They never remove themselves.
 
 Actors compose the same way. `Gift` owns no timers of its own: `DropIn` lands and hovers it,
@@ -613,15 +616,15 @@ See also **[Modals that aren't screens](#modals-that-arent-screens)** below.
 ### Tween a numeric value
 
 PixiJS provides the ticker, but not a general-purpose tween API. The reusable
-`TweenSystem` uses the screen's `dt` from that ticker to interpolate numeric
+`Tweens` uses the screen's `dt` from that ticker to interpolate numeric
 values with an easing function. Retargeting the same key replaces the active
 tween; use `delayMs` to stagger animations, and call `clear()` when the owning
 screen is destroyed.
 
 ```ts
-import { Easing, TweenSystem } from '../systems/TweenSystem';
+import { Easing, Tweens } from '../core/tween';
 
-private readonly tweens = new TweenSystem();
+private readonly tweens = new Tweens();
 
 showScore(next: number): void {
     this.tweens.to('score', this.displayedScore, next, {

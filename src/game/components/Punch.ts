@@ -1,4 +1,4 @@
-import type { Component } from '../core/entities/component';
+import type { Component } from '../core/ecs/Component';
 
 /** What `Punch` drives — anything with a scale. */
 export interface PunchTarget {

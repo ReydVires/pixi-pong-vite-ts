@@ -6,7 +6,7 @@ import { Punch } from '../components/Punch';
 import { CELEBRATION, COLORS, SCREEN_CENTER } from '../config';
 import type { AssetLoader } from '../core/assets/AssetLoader';
 import { createImage } from '../core/display/image';
-import { Entity } from '../core/entities/Entity';
+import { Entity } from '../core/ecs/Entity';
 import type { Nullable } from '../core/types';
 import { CAPY_TYPES } from '../levels/capyTypes';
 import { drawCapyFace } from './capyFace';

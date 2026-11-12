@@ -1,15 +1,16 @@
-import { Container, Graphics } from 'pixi.js';
+import { Graphics } from 'pixi.js';
 import type { Text } from 'pixi.js';
 import { SFX } from '../audio/sfx';
 import { CELEBRATION, COLORS, SCREENS, SCREEN_CENTER } from '../config';
+import { EffectsPool } from '../components/EffectsPool';
+import { FireworksPool } from '../components/FireworksPool';
 import { createColorBackground } from '../core/display/background';
 import { createLabel } from '../core/display/label';
 import { FadeCover, tickCover } from '../core/display/FadeCover';
+import { Entity } from '../core/ecs/Entity';
 import type { Screen, ScreenContext } from '../core/screens/screen';
 import type { Nullable } from '../core/types';
 import { Gift, GIFT_Y, giftStartY } from '../entities/Gift';
-import { EffectsSystem } from '../systems/EffectsSystem';
-import { FireworksSystem } from '../systems/FireworksSystem';
 import { WishPanel, LOWER_TEXT_Y } from '../ui/WishPanel';
 
 /**
@@ -27,8 +28,9 @@ import { WishPanel, LOWER_TEXT_Y } from '../ui/WishPanel';
  */
 export class CelebrationScreen implements Screen {
     private context: Nullable<ScreenContext> = null;
-    private effects: Nullable<EffectsSystem> = null;
-    private fireworks: Nullable<FireworksSystem> = null;
+    private sky: Nullable<Entity> = null;
+    private effects: Nullable<EffectsPool> = null;
+    private fireworks: Nullable<FireworksPool> = null;
 
     private gift: Nullable<Gift> = null;
     private hint: Nullable<Text> = null;
@@ -43,10 +45,12 @@ export class CelebrationScreen implements Screen {
         world.addChild(createColorBackground(COLORS.sky, responsive));
 
         // Fireworks go in their own layer *behind* the present, so a burst can
-        // never hide the thing the player is meant to tap.
-        const skyLayer = new Container();
-        world.addChild(skyLayer);
-        this.effects = new EffectsSystem(skyLayer);
+        // never hide the thing the player is meant to tap. The layer is an
+        // entity hosting both pools, so ticking it drives the whole show.
+        const sky = new Entity();
+        world.addChild(sky);
+        this.sky = sky;
+        this.effects = sky.addComponent(new EffectsPool(sky));
 
         // A pool of light under the present: on a dark screen it is what makes
         // the box the bright object, rather than one more shape on the sky.
@@ -70,7 +74,7 @@ export class CelebrationScreen implements Screen {
         });
 
         // Staggered from the first frame, then random from there.
-        this.fireworks = new FireworksSystem(this.effects, responsive);
+        this.fireworks = sky.addComponent(new FireworksPool(this.effects, responsive));
         this.fireworks.start();
 
         this.cover = new FadeCover(ui, responsive);
@@ -87,9 +91,7 @@ export class CelebrationScreen implements Screen {
     update(dt: number): void {
         if (!this.gift) return;
 
-        this.fireworks?.update(dt);
-        this.effects?.update(dt);
-
+        this.sky?.update(dt); // drives the effects pool and the fireworks together
         this.gift?.update(dt);
 
         this.cover = tickCover(this.cover, dt);
@@ -98,9 +100,9 @@ export class CelebrationScreen implements Screen {
     }
 
     destroy(): void {
-        this.fireworks = null;
-        this.effects?.destroy();
+        this.sky = null;
         this.effects = null;
+        this.fireworks = null;
         this.context = null;
         this.gift = null;
         this.hint = null;
